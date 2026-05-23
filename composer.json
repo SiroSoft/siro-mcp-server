@@ -13,6 +13,14 @@
             "SiroSoft\\McpServer\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "SiroSoft\\McpServer\\Tests\\": "tests/"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
     "extra": {
         "siro": {
             "commands": {
