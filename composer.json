@@ -1,0 +1,28 @@
+{
+    "name": "sirosoft/mcp-server",
+    "description": "Siro MCP Server — AI Agent context engine for Siro PHP Framework. MCP protocol over stdio.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "ext-json": "*",
+        "sirosoft/core": "^0.28 || ^0.29"
+    },
+    "autoload": {
+        "psr-4": {
+            "SiroSoft\\McpServer\\": "src/"
+        }
+    },
+    "extra": {
+        "siro": {
+            "commands": {
+                "mcp:serve": {
+                    "handler": "SiroSoft\\McpServer\\Commands\\McpServeCommand",
+                    "desc": "Start MCP server for AI agents (Claude/GPT/Copilot)"
+                }
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
