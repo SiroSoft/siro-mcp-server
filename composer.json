@@ -6,7 +6,7 @@
     "require": {
         "php": ">=8.2",
         "ext-json": "*",
-        "sirosoft/core": "^0.28 || ^0.29"
+        "sirosoft/core": "^0.31.0"
     },
     "autoload": {
         "psr-4": {
