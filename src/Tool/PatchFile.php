@@ -63,6 +63,10 @@ final class PatchFile implements ToolInterface
         $diff = $arguments['diff'] ?? '';
         $mode = $arguments['mode'] ?? 'diff';
 
+        if (!in_array($mode, ['diff', 'direct'], true)) {
+            return 'Error: Invalid mode. Must be "diff" or "direct".';
+        }
+
         if (!is_string($userPath) || trim($userPath) === '') {
             return 'Error: path parameter is required.';
         }
@@ -118,7 +122,7 @@ final class PatchFile implements ToolInterface
      *
      * Parses lines starting with - (remove), + (add), and context (unchanged).
      *
-     * @return array{success: bool, content: string, removed: int, added: int, error?: string}
+     * @return array{success: bool, content: string, removed: int, added: int, error: string}
      */
     private function applyDiff(string $original, string $diff): array
     {
@@ -145,7 +149,7 @@ final class PatchFile implements ToolInterface
             if (str_starts_with($diffLine, '-')) {
                 // Remove line — expect match with original
                 $expectedOriginal = substr($diffLine, 1);
-                $actualOriginal = $originalLines[$originalIndex] ?? '';
+                $actualOriginal = $originalLines[$originalIndex];
 
                 // Try to match (trimmed comparison for robustness)
                 if (trim($expectedOriginal) === trim($actualOriginal)) {
@@ -189,6 +193,7 @@ final class PatchFile implements ToolInterface
             'content' => implode("\n", $resultLines),
             'removed' => $removed,
             'added' => $added,
+            'error' => '',
         ];
     }
 

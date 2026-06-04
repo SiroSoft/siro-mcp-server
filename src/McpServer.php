@@ -27,8 +27,6 @@ final class McpServer
     /** @var array<string, ResourceInterface> */
     private array $resourceHandlers = [];
 
-    private bool $initialized = false;
-
     /**
      * Register a tool that the AI agent can call.
      */
@@ -57,10 +55,11 @@ final class McpServer
             }
 
             $request = json_decode($line, true);
-            if (!is_array($request) || !isset($request['jsonrpc'], $request['method'])) {
+            if (!is_array($request) || !isset($request['jsonrpc'], $request['method']) || !is_string($request['method'])) {
                 continue;
             }
 
+            /** @var array<string, mixed> $request */
             $response = $this->handleRequest($request);
             if ($response !== null) {
                 $this->writeResponse($response);
@@ -75,7 +74,12 @@ final class McpServer
     private function handleRequest(array $request): ?array
     {
         $method = $request['method'];
+        /** @var int|string|null $id */
         $id = $request['id'] ?? null;
+        if (!is_string($method)) {
+            return $this->makeError($id, -32600, 'Method must be a string');
+        }
+        /** @var array<string, mixed> $params */
         $params = $request['params'] ?? [];
 
         try {
@@ -101,8 +105,6 @@ final class McpServer
      */
     private function handleInitialize(array $params, int|string|null $id): array
     {
-        $this->initialized = true;
-
         return $this->makeResult($id, [
             'protocolVersion' => self::PROTOCOL_VERSION,
             'capabilities' => [
@@ -157,6 +159,7 @@ final class McpServer
             $arguments = [];
         }
 
+        /** @var array<string, mixed> $arguments */
         try {
             $result = $tool->execute($arguments);
             return $this->makeResult($id, [
@@ -224,7 +227,7 @@ final class McpServer
                             [
                                 'uri' => $uri,
                                 'mimeType' => 'text/plain',
-                                'text' => $result['text'] ?? '',
+                                'text' => $result['text'],
                             ],
                         ],
                     ]);

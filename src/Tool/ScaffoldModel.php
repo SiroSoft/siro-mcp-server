@@ -84,11 +84,15 @@ final class ScaffoldModel implements ToolInterface
         }
 
         $name = $this->studly(trim($name));
-        $table = $arguments['table'] ?? $this->tableize($name);
-        $fillable = $arguments['fillable'] ?? [];
-        $casts = $arguments['casts'] ?? [];
-        $relations = $arguments['relations'] ?? [];
-        $softDeletes = $arguments['soft_deletes'] ?? false;
+        $tableRaw = $arguments['table'] ?? null;
+        $table = is_string($tableRaw) ? $tableRaw : $this->tableize($name);
+        /** @var array<int, string> $fillable */
+        $fillable = is_array($arguments['fillable'] ?? null) ? $arguments['fillable'] : [];
+        /** @var array<string, string> $casts */
+        $casts = is_array($arguments['casts'] ?? null) ? $arguments['casts'] : [];
+        /** @var array<int, array{type?: string, target?: string, method?: string}> $relations */
+        $relations = is_array($arguments['relations'] ?? null) ? $arguments['relations'] : [];
+        $softDeletes = is_bool($arguments['soft_deletes'] ?? null) ? $arguments['soft_deletes'] : false;
 
         $path = $this->basePath . '/app/Models/' . $name . '.php';
 
@@ -98,6 +102,12 @@ final class ScaffoldModel implements ToolInterface
 
         $content = $this->generateModel($name, $table, $fillable, $casts, $relations, $softDeletes);
 
+        try {
+            $this->pathValidator->resolve('app/Models/' . $name . '.php');
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
         $bytesWritten = @file_put_contents($path, $content);
         if ($bytesWritten === false) {
             return "Error: Failed to write model file.";
@@ -106,6 +116,11 @@ final class ScaffoldModel implements ToolInterface
         return "OK: Generated app/Models/{$name}.php ({$bytesWritten} bytes)";
     }
 
+    /**
+     * @param array<int, string> $fillable
+     * @param array<string, string> $casts
+     * @param array<int, array{type?: string, target?: string, method?: string}> $relations
+     */
     private function generateModel(string $name, string $table, array $fillable, array $casts, array $relations, bool $softDeletes): string
     {
         $fillableStr = $fillable !== [] ? "\n        '" . implode("',\n        '", $fillable) . "',\n    " : '';
@@ -174,6 +189,7 @@ PHP;
 
     private function tableize(string $value): string
     {
-        return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $value)) . 's';
+        $replaced = preg_replace('/(?<!^)[A-Z]/', '_$0', $value);
+        return strtolower($replaced ?? $value) . 's';
     }
 }

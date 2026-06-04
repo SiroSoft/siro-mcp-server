@@ -60,7 +60,7 @@ final class ProjectAnalyzer
     }
 
     /**
-     * @return array{total: int, list: array<int, array{name: string, methods: string, prefix: string}>}
+     * @return array{total: int, list: array<int, array{methods: string, prefix: string}>}
      */
     private function getRouteSummary(): array
     {
@@ -133,7 +133,7 @@ final class ProjectAnalyzer
         $fillable = [];
         if (preg_match('/protected\s+array\s+\$fillable\s*=\s*\[([^\]]*)\]/s', $content, $m)) {
             preg_match_all('/[\'\"]([^\'\"]+)[\'\"]/', $m[1], $items);
-            $fillable = $items[1] ?? [];
+            $fillable = $items[1];
         }
 
         // Extract casts

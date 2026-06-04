@@ -144,7 +144,7 @@ final class AppResource implements ResourceInterface
             $text .= "\n";
         }
 
-        $text .= "Total: " . (is_array($files) ? count($files) : 0) . " models\n";
+        $text .= "Total: " . count($files) . " models\n";
         return ['text' => $text];
     }
 
@@ -313,8 +313,14 @@ final class AppResource implements ResourceInterface
             $content = file_get_contents($file);
             $text .= "--- {$name} ---\n";
             if ($content !== false) {
+                $sensitiveKeys = ['JWT_SECRET', 'APP_KEY', 'DB_PASSWORD', 'DB_USERNAME', 'MAIL_PASSWORD', 'REDIS_PASSWORD'];
+                $redacted = preg_replace(
+                    '/([\'"]?(?:' . implode('|', array_map('preg_quote', $sensitiveKeys)) . ')[\'"]?\s*=>\s*)[\'"][^\'"]*[\'"]/i',
+                    '$1\'[REDACTED]\'',
+                    $content
+                );
                 // Only show first 30 lines of config
-                $lines = explode("\n", $content);
+                $lines = explode("\n", is_string($redacted) ? $redacted : $content);
                 $lines = array_slice($lines, 0, 30);
                 $text .= implode("\n", $lines) . "\n\n";
             }

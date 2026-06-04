@@ -76,10 +76,11 @@ final class ScaffoldController implements ToolInterface
             $name .= 'Controller';
         }
 
-        $model = isset($arguments['model']) ? $this->studly($arguments['model']) : '';
-        $useResource = $arguments['resource'] ?? false;
-        $useCrud = $arguments['crud'] ?? true;
-        $service = $arguments['service'] ?? '';
+        $modelRaw = $arguments['model'] ?? '';
+        $model = is_string($modelRaw) && $modelRaw !== '' ? $this->studly($modelRaw) : '';
+        $useResource = is_bool($arguments['resource'] ?? null) ? $arguments['resource'] : false;
+        $useCrud = is_bool($arguments['crud'] ?? null) ? $arguments['crud'] : true;
+        $service = is_string($arguments['service'] ?? null) ? $arguments['service'] : '';
 
         $path = $this->basePath . '/app/Controllers/' . $name . '.php';
 
@@ -88,6 +89,12 @@ final class ScaffoldController implements ToolInterface
         }
 
         $content = $this->generateController($name, $model, $useResource, $useCrud, $service);
+
+        try {
+            $this->pathValidator->resolve('app/Controllers/' . $name . '.php');
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
 
         $bytesWritten = @file_put_contents($path, $content);
         if ($bytesWritten === false) {

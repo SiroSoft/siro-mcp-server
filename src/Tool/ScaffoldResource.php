@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SiroSoft\McpServer\Tool;
 
+use SiroSoft\McpServer\Security\PathValidator;
+
 /**
  * scaffold_resource — Full CRUD scaffolding: model + migration + controller + routes + resource.
  *
@@ -14,11 +16,13 @@ namespace SiroSoft\McpServer\Tool;
  */
 final class ScaffoldResource implements ToolInterface
 {
+    private PathValidator $pathValidator;
     private string $basePath;
 
     public function __construct(string $basePath)
     {
         $this->basePath = rtrim($basePath, '\\/');
+        $this->pathValidator = new PathValidator($this->basePath);
     }
 
     public function getName(): string
@@ -100,13 +104,16 @@ final class ScaffoldResource implements ToolInterface
         }
 
         $name = $this->studly(trim($name));
-        $columns = $arguments['columns'] ?? [];
-        $relations = $arguments['relations'] ?? [];
-        $timestamps = $arguments['timestamps'] ?? true;
-        $softDeletes = $arguments['soft_deletes'] ?? false;
-        $useResource = $arguments['resource'] ?? false;
+        /** @var array<int, array{name?: string, type?: string, nullable?: bool, unique?: bool}> $columns */
+        $columns = is_array($arguments['columns'] ?? null) ? $arguments['columns'] : [];
+        /** @var array<int, array{type?: string, target?: string}> $relations */
+        $relations = is_array($arguments['relations'] ?? null) ? $arguments['relations'] : [];
+        $timestamps = is_bool($arguments['timestamps'] ?? null) ? $arguments['timestamps'] : true;
+        $softDeletes = is_bool($arguments['soft_deletes'] ?? null) ? $arguments['soft_deletes'] : false;
+        $useResource = is_bool($arguments['resource'] ?? null) ? $arguments['resource'] : false;
         $table = $this->tableize($name);
-        $controllerName = $arguments['controller'] ?? $name . 'Controller';
+        $controllerRaw = $arguments['controller'] ?? null;
+        $controllerName = is_string($controllerRaw) ? $controllerRaw : $name . 'Controller';
 
         $results = [];
 
@@ -125,16 +132,26 @@ final class ScaffoldResource implements ToolInterface
         }
 
         // 5. Update routes file
-        $routePrefix = $arguments['route_prefix'] ?? $table;
+        $routePrefixRaw = $arguments['route_prefix'] ?? null;
+        $routePrefix = is_string($routePrefixRaw) ? $routePrefixRaw : $table;
         $results[] = $this->updateRoutes($routePrefix, $controllerName);
 
         return implode("\n", $results);
     }
 
+    /**
+     * @param array<int, array{name?: string, type?: string, nullable?: bool, unique?: bool}> $columns
+     */
     private function generateMigration(string $name, string $table, array $columns, bool $timestamps, bool $softDeletes): string
     {
         $filename = date('Y_m_d_His') . '_create_' . $table . '_table.php';
         $path = $this->basePath . '/database/migrations/' . $filename;
+
+        try {
+            $this->pathValidator->resolve('database/migrations/' . $filename);
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
 
         if (!is_dir(dirname($path))) {
             @mkdir(dirname($path), 0775, true);
@@ -202,9 +219,20 @@ PHP;
         return "OK: Generated database/migrations/{$filename}";
     }
 
+    /**
+     * @param array<int, array{name?: string, type?: string, nullable?: bool, unique?: bool}> $columns
+     * @param array<int, array{type?: string, target?: string}> $relations
+     */
     private function generateModel(string $name, string $table, array $columns, array $relations, bool $softDeletes): string
     {
         $path = $this->basePath . '/app/Models/' . $name . '.php';
+
+        try {
+            $this->pathValidator->resolve('app/Models/' . $name . '.php');
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
         if (!is_dir(dirname($path))) {
             @mkdir(dirname($path), 0775, true);
         }
@@ -291,9 +319,19 @@ PHP;
         return "OK: Generated app/Models/{$name}.php";
     }
 
+    /**
+     * @param bool $useResource
+     */
     private function generateController(string $controllerName, string $modelName, bool $useResource): string
     {
         $path = $this->basePath . '/app/Controllers/' . $controllerName . '.php';
+
+        try {
+            $this->pathValidator->resolve('app/Controllers/' . $controllerName . '.php');
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
         if (!is_dir(dirname($path))) {
             @mkdir(dirname($path), 0775, true);
         }
@@ -371,9 +409,19 @@ PHP;
         return "OK: Generated app/Controllers/{$controllerName}.php";
     }
 
+    /**
+     * @param array<int, array{name?: string}> $columns
+     */
     private function generateResource(string $name, array $columns): string
     {
         $path = $this->basePath . '/app/Resources/' . $name . 'Resource.php';
+
+        try {
+            $this->pathValidator->resolve('app/Resources/' . $name . 'Resource.php');
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
         if (!is_dir(dirname($path))) {
             @mkdir(dirname($path), 0775, true);
         }
@@ -414,6 +462,13 @@ PHP;
     private function updateRoutes(string $prefix, string $controllerName): string
     {
         $routeFile = $this->basePath . '/routes/api.php';
+
+        try {
+            $this->pathValidator->resolve('routes/api.php');
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
         if (!file_exists($routeFile)) {
             return "Warning: routes/api.php not found. Add route manually:\n\$router->resource('{$prefix}', \\App\\Controllers\\{$controllerName}::class);";
         }
@@ -433,8 +488,12 @@ PHP;
         if (!str_contains($content, $useImport)) {
             if (preg_match('/^(use\s[^;]+;\s*)+/m', $content, $matches)) {
                 $lastUsePos = strrpos($content, 'use ');
-                $semicolonPos = strpos($content, ';', $lastUsePos);
-                $content = substr_replace($content, "\n{$useImport};", $semicolonPos + 1, 0);
+                if ($lastUsePos !== false) {
+                    $semicolonPos = strpos($content, ';', $lastUsePos);
+                    if ($semicolonPos !== false) {
+                        $content = substr_replace($content, "\n{$useImport};", $semicolonPos + 1, 0);
+                    }
+                }
             } else {
                 $content = "<?php\n\n{$useImport};\n\n" . ltrim($content, "<?php\n ");
             }
@@ -461,6 +520,7 @@ PHP;
 
     private function tableize(string $value): string
     {
-        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $value)) . 's';
+        $replaced = preg_replace('/(?<!^)[A-Z]/', '_$0', $value);
+        return strtolower($replaced ?? $value) . 's';
     }
 }

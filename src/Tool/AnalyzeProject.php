@@ -55,6 +55,10 @@ final class AnalyzeProject implements ToolInterface
         $analyzer = new ProjectAnalyzer($this->basePath);
         $result = $analyzer->analyze($depth);
 
-        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $encoded = json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        if ($encoded === false) {
+            return '{}';
+        }
+        return $encoded;
     }
 }

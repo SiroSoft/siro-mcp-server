@@ -92,6 +92,9 @@ final class ReadDocumentation implements ToolInterface
     public function execute(array $arguments): string
     {
         $topic = $arguments['topic'] ?? '';
+        if (!is_string($topic) || $topic === '') {
+            return 'Error: topic parameter is required.';
+        }
 
         if (!isset(self::DOC_MAP[$topic])) {
             return "Error: Unknown topic '{$topic}'. Available topics: " . implode(', ', array_keys(self::DOC_MAP));

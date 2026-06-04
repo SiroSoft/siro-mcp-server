@@ -92,30 +92,39 @@ final class DebugResource implements ResourceInterface
             return ['text' => $text];
         }
 
+        /** @var array<string, mixed> $data */
         $text .= "Trace File: " . basename($latest) . "\n";
-        $text .= "Time: " . date('Y-m-d H:i:s', filemtime($latest)) . "\n\n";
+
+        $mtime = filemtime($latest);
+        if ($mtime !== false) {
+            $text .= "Time: " . date('Y-m-d H:i:s', $mtime) . "\n\n";
+        } else {
+            $text .= "Time: unknown\n\n";
+        }
 
         // Format trace data
         $text .= "--- Request ---\n";
-        $text .= "Method: " . ($data['method'] ?? 'N/A') . "\n";
-        $text .= "Path: " . ($data['path'] ?? 'N/A') . "\n";
-        $text .= "Status: " . ($data['status'] ?? 'N/A') . "\n";
+        $text .= "Method: " . (is_string($data['method'] ?? null) ? $data['method'] : 'N/A') . "\n";
+        $text .= "Path: " . (is_string($data['path'] ?? null) ? $data['path'] : 'N/A') . "\n";
+        $text .= "Status: " . (is_string($data['status'] ?? null) ? $data['status'] : 'N/A') . "\n";
 
-        if (isset($data['duration'])) {
-            $text .= "Duration: " . round((float) $data['duration'] * 1000, 2) . "ms\n";
+        if (isset($data['duration']) && is_numeric($data['duration'])) {
+            $text .= "Duration: " . round(floatval($data['duration']) * 1000, 2) . "ms\n";
         }
 
-        if (isset($data['error'])) {
+        if (isset($data['error']) && is_array($data['error'])) {
+            /** @var array<string, mixed> $error */
+            $error = $data['error'];
             $text .= "\n--- Error ---\n";
-            $text .= "Message: " . ($data['error']['message'] ?? 'N/A') . "\n";
-            if (isset($data['error']['file'])) {
-                $text .= "File: " . $data['error']['file'] . "\n";
+            $text .= "Message: " . (is_string($error['message'] ?? null) ? $error['message'] : 'N/A') . "\n";
+            if (isset($error['file'])) {
+                $text .= "File: " . (is_string($error['file']) ? $error['file'] : '') . "\n";
             }
-            if (isset($data['error']['line'])) {
-                $text .= "Line: " . $data['error']['line'] . "\n";
+            if (isset($error['line'])) {
+                $text .= "Line: " . (is_string($error['line']) || is_int($error['line']) ? $error['line'] : '') . "\n";
             }
-            if (isset($data['error']['trace'])) {
-                $text .= "Stack Trace:\n" . $data['error']['trace'] . "\n";
+            if (isset($error['trace'])) {
+                $text .= "Stack Trace:\n" . (is_string($error['trace']) ? $error['trace'] : '') . "\n";
             }
         }
 

@@ -115,6 +115,9 @@ final class ExecuteCli implements ToolInterface
 
         // Parse the command name (first token)
         $parts = preg_split('/\s+/', $commandStr);
+        if ($parts === false) {
+            return 'Error: Failed to parse command.';
+        }
         $cmdName = $parts[0] ?? '';
 
         // Check blocklist first
@@ -147,7 +150,7 @@ final class ExecuteCli implements ToolInterface
         return $this->execCommand($fullCommand);
     }
 
-    private function execCommand(string $command): string
+    private function execCommand(string $command, int $timeout = 300): string
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -163,19 +166,48 @@ final class ExecuteCli implements ToolInterface
 
         fclose($pipes[0]);
 
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $stdout = '';
+        $stderr = '';
+        $startTime = time();
+
+        while (true) {
+            if ((time() - $startTime) > $timeout) {
+                proc_terminate($process);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+                return "Error: Command timed out after {$timeout} seconds.";
+            }
+
+            $out = stream_get_contents($pipes[1]);
+            $err = stream_get_contents($pipes[2]);
+            if ($out !== false) {
+                $stdout .= $out;
+            }
+            if ($err !== false) {
+                $stderr .= $err;
+            }
+
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $exitCode = $status['exitcode'];
+                break;
+            }
+
+            usleep(100000);
+        }
 
         fclose($pipes[1]);
         fclose($pipes[2]);
 
-        $exitCode = proc_close($process);
-
         $result = '';
-        if ($stdout !== false && $stdout !== '') {
+        if ($stdout !== '') {
             $result .= $stdout;
         }
-        if ($stderr !== false && $stderr !== '') {
+        if ($stderr !== '') {
             $result .= "\n--- STDERR ---\n" . $stderr;
         }
 

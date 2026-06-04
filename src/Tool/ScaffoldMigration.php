@@ -113,11 +113,13 @@ final class ScaffoldMigration implements ToolInterface
     {
         $name = $arguments['name'] ?? '';
         $table = $arguments['table'] ?? '';
-        $action = $arguments['action'] ?? 'create';
-        $columns = $arguments['columns'] ?? [];
-        $foreignKeys = $arguments['foreign_keys'] ?? [];
-        $timestamps = $arguments['timestamps'] ?? true;
-        $softDeletes = $arguments['soft_deletes'] ?? false;
+        $action = is_string($arguments['action'] ?? null) ? $arguments['action'] : 'create';
+        /** @var array<int, array{name?: string, type?: string, nullable?: bool, default?: string|null, unique?: bool, precision?: int, scale?: int}> $columns */
+        $columns = is_array($arguments['columns'] ?? null) ? $arguments['columns'] : [];
+        /** @var array<int, array{column?: string, references?: string, on?: string, onDelete?: string}> $foreignKeys */
+        $foreignKeys = is_array($arguments['foreign_keys'] ?? null) ? $arguments['foreign_keys'] : [];
+        $timestamps = is_bool($arguments['timestamps'] ?? null) ? $arguments['timestamps'] : true;
+        $softDeletes = is_bool($arguments['soft_deletes'] ?? null) ? $arguments['soft_deletes'] : false;
 
         if (!is_string($name) || trim($name) === '') {
             return 'Error: name parameter is required.';
@@ -135,6 +137,12 @@ final class ScaffoldMigration implements ToolInterface
 
         $content = $this->generateMigration($name, $table, $action, $columns, $foreignKeys, $timestamps, $softDeletes);
 
+        try {
+            $this->pathValidator->resolve('database/migrations/' . $filename);
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
         $bytesWritten = @file_put_contents($path, $content);
         if ($bytesWritten === false) {
             return "Error: Failed to write migration file.";
@@ -143,6 +151,10 @@ final class ScaffoldMigration implements ToolInterface
         return "OK: Generated database/migrations/{$filename} ({$bytesWritten} bytes)";
     }
 
+    /**
+     * @param array<int, array{name?: string, type?: string, nullable?: bool, default?: string|null, unique?: bool, precision?: int, scale?: int}> $columns
+     * @param array<int, array{column?: string, references?: string, on?: string, onDelete?: string}> $foreignKeys
+     */
     private function generateMigration(string $name, string $table, string $action, array $columns, array $foreignKeys, bool $timestamps, bool $softDeletes): string
     {
         if ($action === 'create') {
@@ -181,6 +193,10 @@ return new class
 PHP;
     }
 
+    /**
+     * @param array<int, array{name?: string, type?: string, nullable?: bool, default?: string|null, unique?: bool, precision?: int, scale?: int}> $columns
+     * @param array<int, array{column?: string, references?: string, on?: string, onDelete?: string}> $foreignKeys
+     */
     private function buildCreateSchema(string $table, array $columns, array $foreignKeys, bool $timestamps, bool $softDeletes): string
     {
         $lines = [];
@@ -216,6 +232,10 @@ PHP;
         return implode("\n", $lines);
     }
 
+    /**
+     * @param array<int, array{name?: string, type?: string, nullable?: bool, default?: string|null, unique?: bool, precision?: int, scale?: int}> $columns
+     * @param array<int, array{column?: string, references?: string, on?: string, onDelete?: string}> $foreignKeys
+     */
     private function buildAlterSchema(string $table, array $columns, array $foreignKeys, bool $timestamps, bool $softDeletes): string
     {
         $lines = [];
@@ -243,6 +263,9 @@ PHP;
         return implode("\n", $lines);
     }
 
+    /**
+     * @param array{name?: string, type?: string, nullable?: bool, default?: string|null, unique?: bool, precision?: int, scale?: int} $col
+     */
     private function buildColumnLine(array $col): string
     {
         $name = $col['name'] ?? '';
@@ -281,6 +304,9 @@ PHP;
         return $line;
     }
 
+    /**
+     * @param array{column?: string, references?: string, on?: string, onDelete?: string} $fk
+     */
     private function buildForeignKeyLine(array $fk): string
     {
         $column = $fk['column'] ?? '';
@@ -293,6 +319,7 @@ PHP;
 
     private function sanitizeName(string $name): string
     {
-        return strtolower((string) preg_replace('/[^a-z0-9_]+/', '_', $name));
+        $replaced = preg_replace('/[^a-z0-9_]+/', '_', $name);
+        return strtolower($replaced ?? $name);
     }
 }
