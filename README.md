@@ -28,7 +28,7 @@ The server runs over **stdio** and provides:
 composer require sirosoft/mcp-server
 ```
 
-> Requires PHP 8.2+ and `sirosoft/core ^0.31.0`.
+> Requires PHP 8.2+ and `sirosoft/core ^0.35.0`.
 
 ### 2. Start the Server
 
