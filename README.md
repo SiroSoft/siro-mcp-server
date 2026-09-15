@@ -39,10 +39,10 @@ php siro mcp:serve
 The server listens on **STDIN/STDOUT** for JSON-RPC requests. You should see:
 
 ```
-   ⚡ Siro MCP Server v0.2.0 — Started
+   ⚡ Siro MCP Server v0.3.0 — Started
    Project: your-project
    Tools:   9 registered
-   Resources: 3 providers
+   Resources: 4 providers
    Protocol: JSON-RPC 2.0 over stdio
    Waiting for AI agent connection...
 ```
@@ -99,7 +99,9 @@ The server registers **9 tools** that AI agents can invoke:
 
 - **Path traversal protection**: All file operations are validated against the project root
 - **CLI whitelist**: Only pre-approved commands are executable
-- **Destructive commands** (migrate, db:seed) require explicit `--force` flag
+- **Operator approval**: File writes, scaffolding, and destructive CLI commands require `SIRO_MCP_APPROVAL_TOKEN`
+- **Audit trail**: Every tool call gets a run ID and is recorded with secret redaction
+- **Destructive commands** (migrate, db:seed) require both approval and the explicit `--force` flag
 - **Blocked commands**: `tinker`, `shell`, `exec`, `eval`, `system`, `passthru`
 
 ---
@@ -121,6 +123,7 @@ AI agents can read contextual data via `siro://` URIs:
 | `siro://app/openapi` | OpenAPI specification |
 | `siro://debug/traces/latest` | Latest request trace |
 | `siro://debug/errors/latest` | Latest application error |
+| `siro://mcp/runs/latest` | Latest MCP tool execution, including status and duration |
 
 ---
 

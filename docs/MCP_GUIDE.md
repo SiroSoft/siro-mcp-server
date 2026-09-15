@@ -172,15 +172,29 @@ Sau khi kết nối, AI agent có thể:
 | `siro://app/openapi` | OpenAPI spec |
 | `siro://debug/traces/latest` | Trace request gần nhất |
 | `siro://debug/errors/latest` | Error gần nhất |
+| `siro://mcp/runs/latest` | Kết quả MCP run gần nhất, status, duration và run ID |
 
 ---
 
-## 8. Security
+## 8. Approval, Audit & Security
 
 - **Path traversal**: Mọi file operation đều được check không thoát khỏi project root
 - **CLI whitelist**: Chỉ cho phép ~40 command an toàn
 - **Blocked**: `tinker`, `shell`, `exec`, `eval`, `system`, `passthru`
-- **Destructive**: `migrate`, `db:seed` yêu cầu `--force`
+- **Approval bắt buộc**: `write_file`, `patch_file`, toàn bộ scaffold và CLI destructive cần operator token
+- **Token**: Set `SIRO_MCP_APPROVAL_TOKEN` trong môi trường của process MCP; không ghi token vào prompt hoặc source
+- **Destructive**: `migrate`, `db:seed` cần cả approval token và `force=true`
+- **Audit**: Mỗi tool call được ghi vào `storage/framework/mcp/runs.jsonl`; secret/password/token được redact
+- **Kết quả**: MCP response trả `_meta.runId`, có thể đọc lại qua `siro://mcp/runs/<run_id>`
+
+Ví dụ chạy local:
+
+```bash
+export SIRO_MCP_APPROVAL_TOKEN="operator-token-from-secret-store"
+php siro mcp:serve
+```
+
+Nếu chưa set token, các thao tác thay đổi state sẽ trả `Approval required` và không chạy tool.
 
 ---
 

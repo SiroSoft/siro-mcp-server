@@ -1,5 +1,17 @@
 # Changelog — siro-mcp-server
 
+## [0.3.0] - 2026-09-16
+
+### Added
+- Redacted JSONL audit records for every MCP tool execution.
+- `siro://mcp/runs/*` resources for reading recent execution results.
+- Operator approval token gate for mutations and destructive CLI commands.
+- Run IDs in tool response metadata.
+
+### Security
+- Mutation tools fail closed when `SIRO_MCP_APPROVAL_TOKEN` is not configured.
+- Audit output truncates large values and redacts secrets, passwords, tokens, and API keys.
+
 ## [0.2.0] - 2026-09-15
 
 ### Added

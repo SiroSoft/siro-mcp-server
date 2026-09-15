@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SiroSoft\McpServer;
 
 use SiroSoft\McpServer\Resource\ResourceInterface;
+use SiroSoft\McpServer\Security\ApprovalPolicy;
+use SiroSoft\McpServer\Security\AuditLogger;
 use SiroSoft\McpServer\Tool\ToolInterface;
 
 /**
@@ -18,7 +20,7 @@ use SiroSoft\McpServer\Tool\ToolInterface;
  */
 final class McpServer
 {
-    private const SERVER_VERSION = '0.2.0';
+    private const SERVER_VERSION = '0.3.0';
     private const DEFAULT_PROTOCOL_VERSION = '2025-03-26';
     /** @var list<string> */
     private const SUPPORTED_PROTOCOL_VERSIONS = [
@@ -33,6 +35,13 @@ final class McpServer
 
     /** @var array<string, ResourceInterface> */
     private array $resourceHandlers = [];
+
+    public function __construct(
+        private readonly ?AuditLogger $auditLogger = null,
+        private readonly ?ApprovalPolicy $approvalPolicy = null,
+    ) {
+        // Keep the no-argument constructor useful for protocol unit tests.
+    }
 
     /**
      * Register a tool that the AI agent can call.
@@ -154,7 +163,7 @@ final class McpServer
             $tools[] = [
                 'name' => $tool->getName(),
                 'description' => $tool->getDescription(),
-                'inputSchema' => $tool->getInputSchema(),
+                'inputSchema' => $this->approvalPolicy?->augmentSchema($tool->getName(), $tool->getInputSchema()) ?? $tool->getInputSchema(),
             ];
         }
 
@@ -185,27 +194,55 @@ final class McpServer
         }
 
         /** @var array<string, mixed> $arguments */
-        try {
-            $result = $tool->execute($arguments);
-            return $this->makeResult($id, [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => $result,
-                    ],
-                ],
-            ]);
-        } catch (\Throwable $e) {
-            return $this->makeResult($id, [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => "Error: {$e->getMessage()}",
-                    ],
-                ],
-                'isError' => true,
-            ]);
+        $approvalPolicy = $this->approvalPolicy;
+        $requiresApproval = $approvalPolicy !== null && $approvalPolicy->requiresApproval($name, $arguments);
+        $approved = !$requiresApproval || $this->isApproved($approvalPolicy, $arguments);
+        $auditRun = $this->auditLogger?->start($name, $id, $arguments);
+
+        if (!$approved) {
+            $message = 'Approval required. Set SIRO_MCP_APPROVAL_TOKEN for the operator and pass approval_token.';
+            $this->auditLogger?->finish($auditRun ?? [], 'denied', $message, false);
+            return $this->makeToolResult($id, $message, true, $auditRun['id'] ?? null);
         }
+
+        $toolArguments = $approvalPolicy !== null ? $approvalPolicy->stripApprovalToken($arguments) : $arguments;
+        /** @var array<string, mixed> $toolArguments */
+        try {
+            $result = $tool->execute($toolArguments);
+            $this->auditLogger?->finish($auditRun ?? [], 'completed', $result, true);
+            return $this->makeToolResult($id, $result, false, $auditRun['id'] ?? null);
+        } catch (\Throwable $e) {
+            $message = "Error: {$e->getMessage()}";
+            $this->auditLogger?->finish($auditRun ?? [], 'failed', $message, true);
+            return $this->makeToolResult($id, $message, true, $auditRun['id'] ?? null);
+        }
+    }
+
+    /** @param array<string, mixed> $arguments */
+    private function isApproved(?ApprovalPolicy $policy, array $arguments): bool
+    {
+        return $policy !== null && $policy->isApproved($arguments);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function makeToolResult(int|string|null $id, string $text, bool $isError, ?string $runId): array
+    {
+        $result = [
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => $text,
+                ],
+            ],
+            'isError' => $isError,
+        ];
+        if ($runId !== null) {
+            $result['_meta'] = ['runId' => $runId];
+        }
+
+        return $this->makeResult($id, $result);
     }
 
     /**

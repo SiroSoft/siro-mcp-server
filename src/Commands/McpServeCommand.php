@@ -17,6 +17,9 @@ use SiroSoft\McpServer\Tool\ScaffoldResource;
 use SiroSoft\McpServer\Resource\DocsResource;
 use SiroSoft\McpServer\Resource\AppResource;
 use SiroSoft\McpServer\Resource\DebugResource;
+use SiroSoft\McpServer\Resource\AuditResource;
+use SiroSoft\McpServer\Security\ApprovalPolicy;
+use SiroSoft\McpServer\Security\AuditLogger;
 
 /**
  * mcp:serve — Start the Siro MCP Server for AI agents.
@@ -34,7 +37,8 @@ final class McpServeCommand implements \Siro\Core\Commands\CommandInterface
     /** @param array<int, string> $args */
     public function run(array $args): int
     {
-        $server = new McpServer();
+        $auditLogger = new AuditLogger($this->basePath);
+        $server = new McpServer($auditLogger, new ApprovalPolicy());
 
         // ── Register all Phase 0+ tools ──
         $server->registerTool(new AnalyzeProject($this->basePath));
@@ -51,12 +55,13 @@ final class McpServeCommand implements \Siro\Core\Commands\CommandInterface
         $server->registerResource(new DocsResource($this->basePath));
         $server->registerResource(new AppResource($this->basePath));
         $server->registerResource(new DebugResource($this->basePath));
+        $server->registerResource(new AuditResource($auditLogger));
 
         // ── Add stderr banner ──
-        fwrite(STDERR, "⚡ Siro MCP Server v0.2.0 — Started\n");
+        fwrite(STDERR, "⚡ Siro MCP Server v0.3.0 — Started\n");
         fwrite(STDERR, "   Project: " . basename($this->basePath) . "\n");
         fwrite(STDERR, "   Tools:   9 registered\n");
-        fwrite(STDERR, "   Resources: 3 providers\n");
+        fwrite(STDERR, "   Resources: 4 providers\n");
         fwrite(STDERR, "   Protocol: JSON-RPC 2.0 over stdio\n");
         fwrite(STDERR, "   Waiting for AI agent connection...\n");
 
