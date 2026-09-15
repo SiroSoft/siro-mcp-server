@@ -104,6 +104,9 @@ The server registers **9 tools** that AI agents can invoke:
 - **Destructive commands** (migrate, db:seed) require both approval and the explicit `--force` flag
 - **Blocked commands**: `tinker`, `shell`, `exec`, `eval`, `system`, `passthru`
 
+For the complete approval, audit, incident-response, and production topology
+runbook, see [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
 ---
 
 ## Resources
@@ -140,7 +143,7 @@ AI agents can read contextual data via `siro://` URIs:
 │                                      │
 │  ┌─────────┐  ┌──────────────────┐  │
 │  │  Tools  │  │   Resources      │  │
-│  │ (9 reg) │  │  (3 providers)   │  │
+│  │ (9 reg) │  │  (4 providers)   │  │
 │  ├─────────┤  ├──────────────────┤  │
 │  │ Project │  │ siro://docs/*    │  │
 │  │ Analyzer│  │ siro://app/*     │  │
