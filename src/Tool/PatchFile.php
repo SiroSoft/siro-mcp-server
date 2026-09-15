@@ -130,42 +130,34 @@ final class PatchFile implements ToolInterface
         $diffLines = explode("\n", $diff);
 
         $resultLines = [];
-        $diffIndex = 0;
         $originalIndex = 0;
 
         $removed = 0;
         $added = 0;
 
-        // Copy original lines until we find a diff section
-        while ($originalIndex < count($originalLines) && $diffIndex < count($diffLines)) {
-            $diffLine = trim($diffLines[$diffIndex]);
-
-            // Skip empty diff lines and headers
-            if ($diffLine === '' || str_starts_with($diffLine, '---') || str_starts_with($diffLine, '+++') || str_starts_with($diffLine, '@@')) {
-                $diffIndex++;
+        foreach ($diffLines as $diffLine) {
+            // Skip unified diff metadata and the "no newline" marker.
+            if (str_starts_with($diffLine, '---') || str_starts_with($diffLine, '+++') || str_starts_with($diffLine, '@@') || $diffLine === '\\ No newline at end of file') {
                 continue;
             }
 
             if (str_starts_with($diffLine, '-')) {
                 // Remove line — expect match with original
                 $expectedOriginal = substr($diffLine, 1);
-                $actualOriginal = $originalLines[$originalIndex];
+                $actualOriginal = $originalLines[$originalIndex] ?? null;
 
-                // Try to match (trimmed comparison for robustness)
-                if (trim($expectedOriginal) === trim($actualOriginal)) {
+                if ($actualOriginal !== null && $expectedOriginal === $actualOriginal) {
                     // Remove this line
                     $removed++;
                     $originalIndex++;
-                    $diffIndex++;
                 } else {
-                    // Line doesn't match — try to skip context lines
                     return [
                         'success' => false,
                         'content' => '',
                         'removed' => 0,
                         'added' => 0,
                         'error' => "Line mismatch at original line " . ($originalIndex + 1)
-                            . "\n  Expected (in file): " . $actualOriginal
+                            . "\n  Expected (in file): " . ($actualOriginal ?? '<end of file>')
                             . "\n  Diff says (-): " . $expectedOriginal,
                     ];
                 }
@@ -173,12 +165,21 @@ final class PatchFile implements ToolInterface
                 // Add line
                 $added++;
                 $resultLines[] = substr($diffLine, 1);
-                $diffIndex++;
             } else {
-                // Context line — copy from both
-                $resultLines[] = $originalLines[$originalIndex];
+                // Context lines may be prefixed with a space in unified diff format.
+                $expectedOriginal = str_starts_with($diffLine, ' ') ? substr($diffLine, 1) : $diffLine;
+                $actualOriginal = $originalLines[$originalIndex] ?? null;
+                if ($actualOriginal !== $expectedOriginal) {
+                    return [
+                        'success' => false,
+                        'content' => '',
+                        'removed' => 0,
+                        'added' => 0,
+                        'error' => "Context mismatch at original line " . ($originalIndex + 1),
+                    ];
+                }
+                $resultLines[] = $actualOriginal;
                 $originalIndex++;
-                $diffIndex++;
             }
         }
 

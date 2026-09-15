@@ -11,7 +11,7 @@
 composer require sirosoft/mcp-server
 ```
 
-> Yêu cầu PHP 8.2+ và `sirosoft/core ^0.35.0`.
+> Yêu cầu PHP 8.2+ và `sirosoft/core ^1.0.12`.
 
 ---
 

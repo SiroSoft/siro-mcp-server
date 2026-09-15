@@ -28,7 +28,7 @@ The server runs over **stdio** and provides:
 composer require sirosoft/mcp-server
 ```
 
-> Requires PHP 8.2+ and `sirosoft/core ^0.35.0`.
+> Requires PHP 8.2+ and `sirosoft/core ^1.0.12`.
 
 ### 2. Start the Server
 
@@ -39,7 +39,7 @@ php siro mcp:serve
 The server listens on **STDIN/STDOUT** for JSON-RPC requests. You should see:
 
 ```
-⚡ Siro MCP Server v0.1.1 — Started
+   ⚡ Siro MCP Server v0.2.0 — Started
    Project: your-project
    Tools:   9 registered
    Resources: 3 providers

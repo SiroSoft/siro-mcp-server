@@ -28,13 +28,14 @@ final class McpServerTest extends TestCase
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'initialize',
-            'params' => [],
+            'params' => ['protocolVersion' => '2025-03-26'],
         ]);
 
         $this->assertNotNull($result);
         $this->assertArrayHasKey('result', $result);
-        $this->assertEquals('0.2.0', $result['result']['protocolVersion']);
+        $this->assertEquals('2025-03-26', $result['result']['protocolVersion']);
         $this->assertEquals('siro-mcp-server', $result['result']['serverInfo']['name']);
+        $this->assertEquals('0.2.0', $result['result']['serverInfo']['version']);
         $this->assertArrayHasKey('tools', $result['result']['capabilities']);
         $this->assertArrayHasKey('resources', $result['result']['capabilities']);
     }
@@ -47,6 +48,31 @@ final class McpServerTest extends TestCase
         ]);
 
         $this->assertNull($result);
+    }
+
+    public function test_rejects_unsupported_protocol_version(): void
+    {
+        $result = $this->invokeRequest([
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'initialize',
+            'params' => ['protocolVersion' => '0.2.0'],
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertEquals(-32602, $result['error']['code']);
+    }
+
+    public function test_rejects_invalid_json_rpc_version(): void
+    {
+        $result = $this->invokeRequest([
+            'jsonrpc' => '1.0',
+            'id' => 1,
+            'method' => 'ping',
+        ]);
+
+        $this->assertNotNull($result);
+        $this->assertEquals(-32600, $result['error']['code']);
     }
 
     public function test_lists_tools_empty_when_none_registered(): void

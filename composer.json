@@ -6,7 +6,7 @@
     "require": {
         "php": ">=8.2",
         "ext-json": "*",
-        "sirosoft/core": "^0.35.0"
+        "sirosoft/core": "^1.0.12"
     },
     "autoload": {
         "psr-4": {
@@ -33,7 +33,12 @@
         }
     },
     "scripts": {
-        "analyse": "phpstan analyse --level=max --memory-limit=512M"
+        "test": "phpunit --no-coverage",
+        "analyse": "phpstan analyse --level=max --memory-limit=512M",
+        "check": [
+            "@test",
+            "@analyse"
+        ]
     },
     "minimum-stability": "stable",
     "prefer-stable": true
