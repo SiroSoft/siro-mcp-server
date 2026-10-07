@@ -75,26 +75,38 @@ final class ScaffoldController implements ToolInterface
         if (!str_ends_with($name, 'Controller')) {
             $name .= 'Controller';
         }
+        if (!$this->isClassName($name)) {
+            return 'Error: name must be a valid controller class name.';
+        }
 
         $modelRaw = $arguments['model'] ?? '';
         $model = is_string($modelRaw) && $modelRaw !== '' ? $this->studly($modelRaw) : '';
+        if ($model !== '' && !$this->isClassName($model)) {
+            return 'Error: model must be a valid class name.';
+        }
         $useResource = is_bool($arguments['resource'] ?? null) ? $arguments['resource'] : false;
         $useCrud = is_bool($arguments['crud'] ?? null) ? $arguments['crud'] : true;
         $service = is_string($arguments['service'] ?? null) ? $arguments['service'] : '';
-
-        $path = $this->basePath . '/app/Controllers/' . $name . '.php';
-
-        if (!is_dir(dirname($path))) {
-            @mkdir(dirname($path), 0775, true);
+        if ($service !== '') {
+            $service = $this->studly($service);
+            if (!$this->isClassName($service)) {
+                return 'Error: service must be a valid class name.';
+            }
         }
 
-        $content = $this->generateController($name, $model, $useResource, $useCrud, $service);
+        $path = $this->basePath . '/app/Controllers/' . $name . '.php';
 
         try {
             $this->pathValidator->resolve('app/Controllers/' . $name . '.php');
         } catch (\RuntimeException $e) {
             return "Error: {$e->getMessage()}";
         }
+
+        if (!is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
+
+        $content = $this->generateController($name, $model, $useResource, $useCrud, $service);
 
         $bytesWritten = @file_put_contents($path, $content);
         if ($bytesWritten === false) {
@@ -108,7 +120,8 @@ final class ScaffoldController implements ToolInterface
     {
         $imports = [
             'Siro\\Core\\Controller',
-            'Siro\\Core\\Http\\Request',
+            'Siro\\Core\\Request',
+            'Siro\\Core\\Response',
         ];
         $modelVar = lcfirst($model);
         $modelLower = $model !== '' ? strtolower($model) : 'item';
@@ -125,10 +138,10 @@ final class ScaffoldController implements ToolInterface
         }
 
         if ($useCrud && $model !== '') {
-            $methods = $this->crudMethods($modelVar, $modelLower, $useResource, $service !== '' ? lcfirst($this->studly($service)) : '');
+            $methods = $this->crudMethods($model, $modelVar, $modelLower, $useResource, $service !== '' ? lcfirst($service) : '');
         }
 
-        $importStr = "use " . implode(";\nuse ", $imports) . ";";
+        $importStr = "use " . implode(";\nuse ", $imports);
 
         return <<<PHP
 <?php
@@ -146,91 +159,75 @@ final class {$name} extends Controller
 PHP;
     }
 
-    private function crudMethods(string $modelVar, string $modelLower, bool $useResource, string $serviceVar): string
+    private function crudMethods(string $model, string $modelVar, string $modelLower, bool $useResource, string $serviceVar): string
     {
-        $serviceCall = $serviceVar !== '' ? "\$this->{$serviceVar}->" : '';
+        $indexQuery = $serviceVar !== ''
+            ? "\$result = \$this->{$serviceVar}->getAll(\$request->queryInt('page', 1), \$request->queryInt('per_page', 20));"
+            : "\$result = {$model}::query()->orderBy('id', 'DESC')->paginate(\$request->queryInt('per_page', 20), \$request->queryInt('page', 1));";
+        $findById = $serviceVar !== '' ? "\$this->{$serviceVar}->getById(\$id)" : "{$model}::find(\$id)";
+        $create = $serviceVar !== '' ? "\$this->{$serviceVar}->create(\$data)" : "{$model}::create(\$data)";
+        $update = $serviceVar !== '' ? "\$this->{$serviceVar}->update(\$id, \$data)" : "{$model}::find(\$id)";
+        $indexData = $useResource ? "{$model}Resource::collection(\$result['data'])" : "\$result['data']";
+        $itemData = $useResource ? "{$model}Resource::make(\${$modelVar})" : "\${$modelVar}";
+        $updateBlock = $serviceVar !== ''
+            ? "\${$modelVar} = {$update};\n        if (\${$modelVar} === null) return Response::error('{$model} not found', 404);"
+            : "\${$modelVar} = {$update};\n        if (\${$modelVar} === null) return Response::error('{$model} not found', 404);\n        \${$modelVar}->update(\$data);";
+        $deleteBlock = $serviceVar !== ''
+            ? "if (!\$this->{$serviceVar}->delete(\$id)) return Response::error('{$model} not found', 404);"
+            : "\${$modelVar} = {$findById};\n        if (\${$modelVar} === null) return Response::error('{$model} not found', 404);\n        \${$modelVar}->delete();";
 
         return <<<METHODS
-    /**
-     * List all {$modelLower}s.
-     *
-     * @return string
-     */
-    public function index(): string
+    public function index(Request \$request): Response
     {
-        \${$modelVar}s = {$modelVar}::all();
-{$this->resourceWrap('$' . $modelVar . 's', $useResource, $modelVar)}
+        {$indexQuery}
+        return Response::paginated({$indexData}, \$result['meta'], '{$model} list');
     }
 
-    /**
-     * Show a single {$modelLower}.
-     *
-     * @param string \$id
-     * @return string
-     */
-    public function show(string \$id): string
+    public function show(Request \$request): Response
     {
-        \${$modelVar} = {$serviceCall}findOrFail(\$id);
-{$this->resourceWrap('$' . $modelVar, $useResource, $modelVar)}
+        \$id = (int) \$request->param('id');
+        if (\$id <= 0) return Response::error('Invalid id', 422);
+        \${$modelVar} = {$findById};
+        if (\${$modelVar} === null) return Response::error('{$model} not found', 404);
+        return Response::success({$itemData}, '{$model} detail');
     }
 
-    /**
-     * Store a new {$modelLower}.
-     *
-     * @param Request \$request
-     * @return string
-     */
-    public function store(Request \$request): string
+    public function store(Request \$request): Response
     {
         \$data = \$request->validate([
             // TODO: Add validation rules
         ]);
 
-        \${$modelVar} = {$serviceCall}create(\$data);
-{$this->resourceWrap('$' . $modelVar, $useResource, $modelVar)}
+        \${$modelVar} = {$create};
+        return Response::created({$itemData}, '{$model} created');
     }
 
-    /**
-     * Update an existing {$modelLower}.
-     *
-     * @param string \$id
-     * @param Request \$request
-     * @return string
-     */
-    public function update(string \$id, Request \$request): string
+    public function update(Request \$request): Response
     {
+        \$id = (int) \$request->param('id');
+        if (\$id <= 0) return Response::error('Invalid id', 422);
         \$data = \$request->validate([
             // TODO: Add validation rules
         ]);
 
-        \${$modelVar} = {$serviceCall}findOrFail(\$id);
-        \${$modelVar}->update(\$data);
-{$this->resourceWrap('$' . $modelVar, $useResource, $modelVar)}
+        {$updateBlock}
+        return Response::success({$itemData}, '{$model} updated');
     }
 
-    /**
-     * Delete a {$modelLower}.
-     *
-     * @param string \$id
-     * @return string
-     */
-    public function delete(string \$id): string
+    public function delete(Request \$request): Response
     {
-        \${$modelVar} = {$serviceCall}findOrFail(\$id);
-        \${$modelVar}->delete();
+        \$id = (int) \$request->param('id');
+        if (\$id <= 0) return Response::error('Invalid id', 422);
+        {$deleteBlock}
 
-        return response()->json(['message' => 'Deleted successfully']);
+        return Response::success(null, '{$model} deleted');
     }
 METHODS;
     }
 
-    private function resourceWrap(string $var, bool $useResource, string $modelVar): string
+    private function isClassName(string $value): bool
     {
-        if ($useResource) {
-            $resourceClass = $this->studly($modelVar) . 'Resource';
-            return "        return {$resourceClass}::collection(\${$modelVar})->toJson();";
-        }
-        return "        return response()->json(\${$modelVar});";
+        return preg_match('/^[A-Z][A-Za-z0-9]*$/', $value) === 1;
     }
 
     private function studly(string $value): string

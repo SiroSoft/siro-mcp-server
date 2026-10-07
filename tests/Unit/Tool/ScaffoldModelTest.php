@@ -75,6 +75,14 @@ final class ScaffoldModelTest extends TestCase
         $content = file_get_contents($this->basePath . '/app/Models/Category.php');
         $this->assertStringContainsString('function product()', $content ?: '');
         $this->assertStringContainsString('$this->hasMany(Product::class)', $content ?: '');
+        $this->assertStringContainsString('Siro\\Core\\DB\\Relations\\HasMany', $content ?: '');
+        $this->assertStringNotContainsString('ModelRelations', $content ?: '');
+        // Relation method must be inside the class body, not after the closing brace.
+        $posMethod = strpos($content ?: '', 'function product()');
+        $posLastBrace = strrpos($content ?: '', '}');
+        $this->assertNotFalse($posMethod);
+        $this->assertNotFalse($posLastBrace);
+        $this->assertLessThan($posLastBrace, $posMethod);
     }
 
     public function test_generates_model_with_soft_deletes(): void
@@ -86,6 +94,8 @@ final class ScaffoldModelTest extends TestCase
 
         $content = file_get_contents($this->basePath . '/app/Models/Post.php');
         $this->assertStringContainsString('use SoftDeletes', $content ?: '');
+        $this->assertStringContainsString('use Siro\\Core\\DB\\SoftDeletes;', $content ?: '');
+        $this->assertStringNotContainsString('Model\\SoftDeletes', $content ?: '');
     }
 
     public function test_requires_name(): void

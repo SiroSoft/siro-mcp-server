@@ -50,11 +50,20 @@ final class ScaffoldControllerTest extends TestCase
 
         $content = file_get_contents($this->basePath . '/app/Controllers/ProductController.php');
         $this->assertStringContainsString('class ProductController extends Controller', $content ?: '');
-        $this->assertStringContainsString('function index()', $content ?: '');
+        $this->assertStringContainsString('function index(Request $request): Response', $content ?: '');
         $this->assertStringContainsString('function store', $content ?: '');
         $this->assertStringContainsString('function show', $content ?: '');
         $this->assertStringContainsString('function update', $content ?: '');
         $this->assertStringContainsString('function delete', $content ?: '');
+        $this->assertStringContainsString('use Siro\\Core\\Request;', $content ?: '');
+        $this->assertStringContainsString('use Siro\\Core\\Response;', $content ?: '');
+        $this->assertStringNotContainsString('response()->', $content ?: '');
+        $this->assertStringNotContainsString('->toJson()', $content ?: '');
+
+        $output = [];
+        $exitCode = 1;
+        exec(PHP_BINARY . ' -l ' . escapeshellarg($this->basePath . '/app/Controllers/ProductController.php'), $output, $exitCode);
+        $this->assertSame(0, $exitCode, implode("\n", $output));
     }
 
     public function test_generates_non_crud_controller(): void
@@ -67,5 +76,13 @@ final class ScaffoldControllerTest extends TestCase
         $this->assertStringContainsString('app/Controllers/HealthController.php', $result);
         $content = file_get_contents($this->basePath . '/app/Controllers/HealthController.php');
         $this->assertStringNotContainsString('function index', $content ?: '');
+    }
+
+    public function test_rejects_unsafe_controller_name(): void
+    {
+        $result = $this->scaffold->execute(['name' => '../Escape', 'crud' => false]);
+
+        $this->assertStringContainsString('valid controller class name', $result);
+        $this->assertFileDoesNotExist($this->basePath . '/app/EscapeController.php');
     }
 }

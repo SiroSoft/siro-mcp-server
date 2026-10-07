@@ -28,7 +28,7 @@ The server runs over **stdio** and provides:
 composer require sirosoft/mcp-server
 ```
 
-> Requires PHP 8.2+ and `sirosoft/core ^1.0.12`.
+> Requires PHP 8.2+ and `sirosoft/core ^1.0.14`.
 
 ### 2. Start the Server
 
@@ -39,7 +39,7 @@ php siro mcp:serve
 The server listens on **STDIN/STDOUT** for JSON-RPC requests. You should see:
 
 ```
-   ⚡ Siro MCP Server v0.3.0 — Started
+    ⚡ Siro MCP Server v0.4.0 — Started
    Project: your-project
    Tools:   9 registered
    Resources: 4 providers
@@ -93,7 +93,7 @@ The server registers **9 tools** that AI agents can invoke:
 | `scaffold_model` | Generate model classes with fillable, casts, and relations |
 | `scaffold_controller` | Generate controller classes with optional CRUD methods |
 | `scaffold_migration` | Generate database migrations with columns, indexes, and foreign keys |
-| `scaffold_resource` | Full CRUD scaffolding (model + migration + controller + routes) |
+| `scaffold_resource` | Full CRUD scaffolding (model + migration + repository + service + controller + resource + routes + feature test) |
 
 ### Security
 
@@ -216,6 +216,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 - **v0.1.x** — Initial release (tools + resources + context + security)
 - **v0.2.x** — Protocol enhancements, additional tools
+- **v0.3.x** — Audited approval-gated execution, run resources
+- **v0.4.x** — Full layered CRUD scaffolding, core 1.3 support
 
 ---
 

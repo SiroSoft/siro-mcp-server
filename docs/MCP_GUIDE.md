@@ -153,7 +153,7 @@ Sau khi kết nối, AI agent có thể:
 | `scaffold_model` | Tạo Model | "Tạo Model Product với fillable name,price" |
 | `scaffold_controller` | Tạo Controller | "Tạo ProductController với CRUD" |
 | `scaffold_migration` | Tạo Migration | "Tạo migration create_products_table" |
-| `scaffold_resource` | Full CRUD (model + migration + controller + routes) | "Tạo CRUD cho categories" |
+| `scaffold_resource` | Full CRUD (model + migration + repository + service + controller + resource + routes + feature test) | "Tạo CRUD cho categories" |
 
 ---
 

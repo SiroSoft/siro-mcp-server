@@ -38,7 +38,7 @@ final class McpServerTest extends TestCase
         $this->assertArrayHasKey('result', $result);
         $this->assertEquals('2025-03-26', $result['result']['protocolVersion']);
         $this->assertEquals('siro-mcp-server', $result['result']['serverInfo']['name']);
-        $this->assertEquals('0.3.0', $result['result']['serverInfo']['version']);
+        $this->assertEquals('0.4.0', $result['result']['serverInfo']['version']);
         $this->assertArrayHasKey('tools', $result['result']['capabilities']);
         $this->assertArrayHasKey('resources', $result['result']['capabilities']);
     }

@@ -7,7 +7,7 @@ namespace SiroSoft\McpServer\Tool;
 use SiroSoft\McpServer\Security\PathValidator;
 
 /**
- * scaffold_resource — Full CRUD scaffolding: model + migration + controller + routes + resource.
+ * scaffold_resource — Full CRUD scaffolding: model + migration + repository + service + controller + resource + routes + feature test.
  *
  * Orchestrates scaffold_model, scaffold_migration, scaffold_controller,
  * and generates route registration. Equivalent to `php siro make:crud` via MCP.
@@ -32,7 +32,7 @@ final class ScaffoldResource implements ToolInterface
 
     public function getDescription(): string
     {
-        return 'Full CRUD scaffolding: generates model, migration, controller, API resource, and route registration.';
+        return 'Full CRUD scaffolding: generates model, migration, repository, service, controller, API resource, routes, and a feature test.';
     }
 
     public function getInputSchema(): array
@@ -81,7 +81,7 @@ final class ScaffoldResource implements ToolInterface
                 'resource' => [
                     'type' => 'boolean',
                     'description' => 'Generate API resource transformer',
-                    'default' => false,
+                    'default' => true,
                 ],
                 'controller' => [
                     'type' => 'string',
@@ -104,17 +104,61 @@ final class ScaffoldResource implements ToolInterface
         }
 
         $name = $this->studly(trim($name));
-        /** @var array<int, array{name?: string, type?: string, nullable?: bool, unique?: bool}> $columns */
-        $columns = is_array($arguments['columns'] ?? null) ? $arguments['columns'] : [];
-        /** @var array<int, array{type?: string, target?: string}> $relations */
-        $relations = is_array($arguments['relations'] ?? null) ? $arguments['relations'] : [];
+        if (!$this->isClassName($name)) {
+            return 'Error: name must be a valid resource class name.';
+        }
+        $rawColumns = is_array($arguments['columns'] ?? null) ? $arguments['columns'] : [];
+        /** @var array<int, array{name: string, type: string, nullable: bool, unique: bool}> $columns */
+        $columns = [];
+        $allowedColumnTypes = ['string', 'text', 'integer', 'bigint', 'float', 'boolean', 'date', 'datetime', 'json', 'decimal'];
+        foreach ($rawColumns as $column) {
+            if (!is_array($column) || !is_string($column['name'] ?? null) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column['name'])) {
+                return 'Error: each column name must be a valid database identifier.';
+            }
+            $columnType = is_string($column['type'] ?? null) ? $column['type'] : 'string';
+            if (!in_array($columnType, $allowedColumnTypes, true)) {
+                return 'Error: each column type must be supported by the schema builder.';
+            }
+            $columns[] = [
+                'name' => $column['name'],
+                'type' => $columnType,
+                'nullable' => is_bool($column['nullable'] ?? null) ? $column['nullable'] : false,
+                'unique' => is_bool($column['unique'] ?? null) ? $column['unique'] : false,
+            ];
+        }
+
+        $rawRelations = is_array($arguments['relations'] ?? null) ? $arguments['relations'] : [];
+        /** @var array<int, array{type: string, target: string}> $relations */
+        $relations = [];
+        $allowedRelationTypes = ['hasMany', 'belongsTo', 'belongsToMany', 'hasOne'];
+        foreach ($rawRelations as $relation) {
+            if (!is_array($relation) || !is_string($relation['target'] ?? null) || !$this->isClassName($this->studly($relation['target']))) {
+                return 'Error: each relation target must be a valid class name.';
+            }
+            $relationType = is_string($relation['type'] ?? null) ? $relation['type'] : 'hasMany';
+            if (!in_array($relationType, $allowedRelationTypes, true)) {
+                return 'Error: each relation type must be supported.';
+            }
+            $relations[] = ['type' => $relationType, 'target' => $this->studly($relation['target'])];
+        }
         $timestamps = is_bool($arguments['timestamps'] ?? null) ? $arguments['timestamps'] : true;
         $softDeletes = is_bool($arguments['soft_deletes'] ?? null) ? $arguments['soft_deletes'] : false;
-        $useResource = is_bool($arguments['resource'] ?? null) ? $arguments['resource'] : false;
+        $useResource = is_bool($arguments['resource'] ?? null) ? $arguments['resource'] : true;
         $table = $this->tableize($name);
+        $serviceName = $name . 'Service';
+        $repositoryName = $name . 'Repository';
         $controllerRaw = $arguments['controller'] ?? null;
-        $controllerName = is_string($controllerRaw) ? $controllerRaw : $name . 'Controller';
-
+        $controllerName = is_string($controllerRaw) && trim($controllerRaw) !== ''
+            ? $this->studly(trim($controllerRaw))
+            : $name . 'Controller';
+        if (!$this->isClassName($controllerName)) {
+            return 'Error: controller must be a valid class name.';
+        }
+        $routePrefixRaw = $arguments['route_prefix'] ?? null;
+        $routePrefix = is_string($routePrefixRaw) && trim($routePrefixRaw) !== '' ? trim($routePrefixRaw) : $table;
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_\/-]*$/', $routePrefix) || str_contains($routePrefix, '..')) {
+            return 'Error: route_prefix must be a safe route path.';
+        }
         $results = [];
 
         // 1. Generate migration
@@ -123,20 +167,149 @@ final class ScaffoldResource implements ToolInterface
         // 2. Generate model
         $results[] = $this->generateModel($name, $table, $columns, $relations, $softDeletes);
 
-        // 3. Generate controller
-        $results[] = $this->generateController($controllerName, $name, $useResource);
+        // 3. Generate repository and service layers
+        $results[] = $this->generateRepository($repositoryName, $name, $table);
+        $results[] = $this->generateService($serviceName, $name, $repositoryName);
 
-        // 4. Generate resource if requested
+        // 4. Generate controller
+        $results[] = $this->generateController($controllerName, $name, $useResource, $serviceName);
+
+        // 5. Generate resource if requested
         if ($useResource) {
             $results[] = $this->generateResource($name, $columns);
         }
 
-        // 5. Update routes file
-        $routePrefixRaw = $arguments['route_prefix'] ?? null;
-        $routePrefix = is_string($routePrefixRaw) ? $routePrefixRaw : $table;
+        // 6. Generate feature test
+        $results[] = $this->generateTest($name, $table);
+
+        // 7. Update routes file
         $results[] = $this->updateRoutes($routePrefix, $controllerName);
 
         return implode("\n", $results);
+    }
+
+    private function generateRepository(string $repositoryName, string $modelName, string $table): string
+    {
+        $path = $this->basePath . '/app/Repositories/' . $repositoryName . '.php';
+        $relativePath = 'app/Repositories/' . $repositoryName . '.php';
+        if (str_contains(str_replace('\\', '/', $relativePath), '..')) {
+            return 'Error: Path traversal detected: ".." is not allowed';
+        }
+        if (!is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
+        try {
+            $this->pathValidator->resolve($relativePath);
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
+        $content = <<<PHP
+<?php
+
+declare(strict_types=1);
+
+namespace App\Repositories;
+
+use App\Models\{$modelName};
+
+final class {$repositoryName}
+{
+    public function findAll(int \$page = 1, int \$perPage = 20): array
+    {
+        return {$modelName}::query()->orderBy('id', 'DESC')->paginate(\$perPage, \$page);
+    }
+
+    public function findById(int \$id): mixed
+    {
+        return {$modelName}::find(\$id);
+    }
+
+    public function store(array \$data): mixed
+    {
+        return {$modelName}::create(\$data + ['created_at' => date('Y-m-d H:i:s')]);
+    }
+
+    public function update(int \$id, array \$data): mixed
+    {
+        \$item = \$this->findById(\$id);
+        if (\$item === null) return null;
+        \$item->update(\$data);
+        return \$item;
+    }
+
+    public function destroy(int \$id): bool
+    {
+        \$item = \$this->findById(\$id);
+        return \$item !== null && (bool) \$item->delete();
+    }
+}
+PHP;
+
+        @file_put_contents($path, $content);
+        return "OK: Generated app/Repositories/{$repositoryName}.php for {$table}";
+    }
+
+    private function generateService(string $serviceName, string $modelName, string $repositoryName): string
+    {
+        $path = $this->basePath . '/app/Services/' . $serviceName . '.php';
+        $relativePath = 'app/Services/' . $serviceName . '.php';
+        if (str_contains(str_replace('\\', '/', $relativePath), '..')) {
+            return 'Error: Path traversal detected: ".." is not allowed';
+        }
+        if (!is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
+        try {
+            $this->pathValidator->resolve($relativePath);
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
+        $content = <<<PHP
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Repositories\{$repositoryName};
+
+final class {$serviceName}
+{
+    public function __construct(private readonly {$repositoryName} \$repository)
+    {
+    }
+
+    public function getAll(int \$page = 1, int \$perPage = 20): array
+    {
+        return \$this->repository->findAll(\$page, \$perPage);
+    }
+
+    public function getById(int \$id): mixed
+    {
+        return \$this->repository->findById(\$id);
+    }
+
+    public function create(array \$data): mixed
+    {
+        return \$this->repository->store(\$data);
+    }
+
+    public function update(int \$id, array \$data): mixed
+    {
+        return \$this->repository->update(\$id, \$data);
+    }
+
+    public function delete(int \$id): bool
+    {
+        return \$this->repository->destroy(\$id);
+    }
+}
+PHP;
+
+        @file_put_contents($path, $content);
+        return "OK: Generated app/Services/{$serviceName}.php for {$modelName}";
     }
 
     /**
@@ -274,7 +447,7 @@ PHP;
         $traits = '';
 
         if ($softDeletes) {
-            $uses[] = 'Siro\\Core\\Model\\SoftDeletes';
+            $uses[] = 'Siro\\Core\\DB\\SoftDeletes';
             $traits = "\n    use SoftDeletes;\n";
         }
 
@@ -284,7 +457,7 @@ PHP;
             $relTarget = $rel['target'] ?? 'RelatedModel';
             $relMethod = lcfirst(basename(str_replace('\\', '/', $relTarget)));
 
-            $relationsStr .= "\n\n    public function {$relMethod}(): \\Siro\\Core\\ModelRelations\\{$this->studly($relType)}\n    {\n        return \$this->{$relType}({$relTarget}::class);\n    }";
+            $relationsStr .= "\n\n    public function {$relMethod}(): \\Siro\\Core\\DB\\Relations\\{$this->studly($relType)}\n    {\n        return \$this->{$relType}({$relTarget}::class);\n    }";
         }
 
         $usesStr = "use " . implode(";\nuse ", $uses) . ";";
@@ -310,9 +483,8 @@ final class {$name} extends Model
     ];
 
     /** @var array<int, string> */
-    protected array \$hidden = [];
+    protected array \$hidden = [];{$relationsStr}
 }
-{$relationsStr}
 PHP;
 
         file_put_contents($path, $content);
@@ -322,7 +494,7 @@ PHP;
     /**
      * @param bool $useResource
      */
-    private function generateController(string $controllerName, string $modelName, bool $useResource): string
+    private function generateController(string $controllerName, string $modelName, bool $useResource, string $serviceName): string
     {
         $path = $this->basePath . '/app/Controllers/' . $controllerName . '.php';
 
@@ -337,12 +509,12 @@ PHP;
         }
 
         $modelVar = lcfirst($modelName);
-        $modelLower = strtolower($modelName);
 
         $imports = [
             'Siro\\Core\\Controller',
-            'Siro\\Core\\Http\\Request',
-            'App\\Models\\' . $modelName,
+            'Siro\\Core\\Request',
+            'Siro\\Core\\Response',
+            'App\\Services\\' . $serviceName,
         ];
 
         if ($useResource) {
@@ -350,6 +522,10 @@ PHP;
         }
 
         $importStr = "use " . implode(";\nuse ", $imports) . ";";
+        $indexData = $useResource
+            ? "{$modelName}Resource::collection(\$result['data'])"
+            : "\$result['data']";
+        $showData = $useResource ? "{$modelName}Resource::make(\${$modelVar})" : "\${$modelVar}";
 
         $content = <<<PHP
 <?php
@@ -362,45 +538,57 @@ namespace App\Controllers;
 
 final class {$controllerName} extends Controller
 {
-    public function index(): string
+    public function __construct(private readonly {$serviceName} \$service)
     {
-        \${$modelVar}s = {$modelName}::all();
-{$this->resourceWrap('$' . $modelVar . 's', $useResource, $modelName)}
     }
 
-    public function show(string \$id): string
+    public function index(Request \$request): Response
     {
-        \${$modelVar} = {$modelName}::findOrFail(\$id);
-{$this->resourceWrap('$' . $modelVar, $useResource, $modelName)}
+        \$result = \$this->service->getAll(\$request->queryInt('page', 1), \$request->queryInt('per_page', 20));
+        return Response::paginated({$indexData}, \$result['meta'], '{$modelName} list');
     }
 
-    public function store(Request \$request): string
+    public function show(Request \$request): Response
+    {
+        \$id = (int) \$request->param('id');
+        if (\$id <= 0) return Response::error('Invalid id', 422);
+        \${$modelVar} = \$this->service->getById(\$id);
+        if (\${$modelVar} === null) return Response::error('{$modelName} not found', 404);
+        return Response::success({$showData}, '{$modelName} detail');
+    }
+
+    public function store(Request \$request): Response
     {
         \$data = \$request->validate([
             // TODO: Add validation rules
         ]);
 
-        \${$modelVar} = {$modelName}::create(\$data);
-{$this->resourceWrap('$' . $modelVar, $useResource, $modelName)}
+        \${$modelVar} = \$this->service->create(\$data);
+        return Response::created({$showData}, '{$modelName} created');
     }
 
-    public function update(string \$id, Request \$request): string
+    public function update(Request \$request): Response
     {
+        \$id = (int) \$request->param('id');
+        if (\$id <= 0) return Response::error('Invalid id', 422);
         \$data = \$request->validate([
             // TODO: Add validation rules
         ]);
 
-        \${$modelVar} = {$modelName}::findOrFail(\$id);
-        \${$modelVar}->update(\$data);
-{$this->resourceWrap('$' . $modelVar, $useResource, $modelName)}
+        \${$modelVar} = \$this->service->update(\$id, \$data);
+        if (\${$modelVar} === null) return Response::error('{$modelName} not found', 404);
+        return Response::success({$showData}, '{$modelName} updated');
     }
 
-    public function delete(string \$id): string
+    public function delete(Request \$request): Response
     {
-        \${$modelVar} = {$modelName}::findOrFail(\$id);
-        \${$modelVar}->delete();
+        \$id = (int) \$request->param('id');
+        if (\$id <= 0) return Response::error('Invalid id', 422);
+        if (!\$this->service->delete(\$id)) {
+            return Response::error('{$modelName} not found', 404);
+        }
 
-        return response()->json(['message' => 'Deleted successfully']);
+        return Response::success(null, '{$modelName} deleted');
     }
 }
 PHP;
@@ -415,6 +603,9 @@ PHP;
     private function generateResource(string $name, array $columns): string
     {
         $path = $this->basePath . '/app/Resources/' . $name . 'Resource.php';
+        if (!is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
 
         try {
             $this->pathValidator->resolve('app/Resources/' . $name . 'Resource.php');
@@ -422,17 +613,13 @@ PHP;
             return "Error: {$e->getMessage()}";
         }
 
-        if (!is_dir(dirname($path))) {
-            @mkdir(dirname($path), 0775, true);
-        }
-
-        $fields = "'id' => \$this->id,";
+        $fields = "'id' => \$this->data['id'] ?? null,";
         foreach ($columns as $col) {
             $colName = $col['name'] ?? '';
             if ($colName === '' || $colName === 'id') {
                 continue;
             }
-            $fields .= "\n            '{$colName}' => \$this->{$colName},";
+            $fields .= "\n            '{$colName}' => \$this->data['{$colName}'] ?? null,";
         }
 
         $content = <<<PHP
@@ -446,7 +633,8 @@ use Siro\\Core\\Resource;
 
 final class {$name}Resource extends Resource
 {
-    public function toArray(object \$model): array
+    /** @return array<string, mixed> */
+    public function toArray(): array
     {
         return [
             {$fields}
@@ -457,6 +645,66 @@ PHP;
 
         file_put_contents($path, $content);
         return "OK: Generated app/Resources/{$name}Resource.php";
+    }
+
+    private function generateTest(string $name, string $routePrefix): string
+    {
+        $className = $name . 'Test';
+        $path = $this->basePath . '/tests/Feature/' . $className . '.php';
+        $relativePath = 'tests/Feature/' . $className . '.php';
+        if (str_contains(str_replace('\\', '/', $relativePath), '..')) {
+            return 'Error: Path traversal detected: ".." is not allowed';
+        }
+        if (!is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
+        try {
+            $this->pathValidator->resolve($relativePath);
+        } catch (\RuntimeException $e) {
+            return "Error: {$e->getMessage()}";
+        }
+
+        $endpoint = '/api/' . $routePrefix;
+        $content = <<<PHP
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Feature;
+
+use App\Tests\TestCase;
+
+final class {$className} extends TestCase
+{
+    public function testIndexReturns200(): void
+    {
+        \$this->get('{$endpoint}')->assertOk();
+    }
+
+    public function testShowReturns404ForUnknownId(): void
+    {
+        \$this->get('{$endpoint}/999999')->assertNotFound();
+    }
+
+    public function testStoreRejectsMissingRequiredData(): void
+    {
+        \$this->post('{$endpoint}', [])->assertValidationError();
+    }
+
+    public function testUpdateReturns404ForUnknownId(): void
+    {
+        \$this->put('{$endpoint}/999999', ['name' => 'Updated'])->assertNotFound();
+    }
+
+    public function testDeleteReturns404ForUnknownId(): void
+    {
+        \$this->delete('{$endpoint}/999999')->assertNotFound();
+    }
+}
+PHP;
+
+        @file_put_contents($path, $content);
+        return "OK: Generated tests/Feature/{$className}.php";
     }
 
     private function updateRoutes(string $prefix, string $controllerName): string
@@ -505,17 +753,14 @@ PHP;
         return "OK: Added route to routes/api.php: {$routeLine}";
     }
 
-    private function resourceWrap(string $var, bool $useResource, string $modelName): string
-    {
-        if ($useResource) {
-            return "        return {$modelName}Resource::collection({$var})->toJson();";
-        }
-        return "        return response()->json({$var});";
-    }
-
     private function studly(string $value): string
     {
         return str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $value)));
+    }
+
+    private function isClassName(string $value): bool
+    {
+        return preg_match('/^[A-Z][A-Za-z0-9]*$/', $value) === 1;
     }
 
     private function tableize(string $value): string

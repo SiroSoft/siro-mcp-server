@@ -1,5 +1,30 @@
 # Changelog — siro-mcp-server
 
+## [0.4.0] - 2026-10-07
+
+### Added
+- `scaffold_resource` now generates the full layered stack: model + migration
+  + repository + service + controller + API resource + routes + feature test
+  (previously model + migration + controller + routes only).
+- Scaffolded controllers follow the current core conventions (`Siro\Core\Request`,
+  `Siro\Core\Response`, `Response::paginated/success/created/error`,
+  `Model::query()->paginate()`) and support service-layer delegation.
+- Strict input validation for scaffold names, columns, relations, and route
+  prefixes with fail-closed error messages.
+
+### Fixed
+- Model scaffolding emits the real core namespaces
+  (`Siro\Core\DB\SoftDeletes`, `Siro\Core\DB\Relations\*`) instead of
+  non-existent `Siro\Core\Model\SoftDeletes` / `Siro\Core\ModelRelations\*`.
+- Relation methods are generated inside the model class body (previously
+  appended after the closing brace).
+- Generated services use core's `getAll`/`getById` naming over the repository's
+  `findAll`/`findById`; generated API resources implement `toArray(): array`
+  over `$this->data` per `Siro\Core\Resource`.
+
+### Dependencies
+- `sirosoft/core` lockfile aligned to v1.3.0 (`^1.0.14` constraint covers 1.x).
+
 ## [0.3.0] - 2026-09-16
 
 ### Added
