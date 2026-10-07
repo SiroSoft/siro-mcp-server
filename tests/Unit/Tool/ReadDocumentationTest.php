@@ -76,6 +76,18 @@ final class ReadDocumentationTest extends TestCase
         $this->assertStringContainsString('Vendor DB Docs', $result);
     }
 
+    public function test_reads_section_topic_from_vendor_docs(): void
+    {
+        $this->createDocFile(
+            'vendor/sirosoft/core/docs/DATABASE.md',
+            "# Database\n\n## Model ORM\n\nModels live in App\\Models.\n\n## Migrations\n\nRun php siro migrate.\n"
+        );
+        $result = $this->tool->execute(['topic' => 'model']);
+        $this->assertStringContainsString('Models live in', $result);
+        $this->assertStringNotContainsString('not found', $result);
+        $this->assertStringNotContainsString('Run php siro migrate', $result);
+    }
+
     public function test_has_input_schema(): void
     {
         $schema = $this->tool->getInputSchema();

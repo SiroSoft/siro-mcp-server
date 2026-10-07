@@ -1,5 +1,12 @@
 # Changelog — siro-mcp-server
 
+## [Unreleased]
+
+### Fixed
+- `read_documentation` topics carrying a `#section` fragment (`model`,
+  `migration`) no longer report "file not found" — the fragment is stripped
+  for file lookup and the section is extracted after reading.
+
 ## [0.4.0] - 2026-10-07
 
 ### Added
