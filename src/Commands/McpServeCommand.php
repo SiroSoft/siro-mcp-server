@@ -58,7 +58,7 @@ final class McpServeCommand implements \Siro\Core\Commands\CommandInterface
         $server->registerResource(new AuditResource($auditLogger));
 
         // ── Add stderr banner ──
-        fwrite(STDERR, "⚡ Siro MCP Server v0.4.0 — Started\n");
+        fwrite(STDERR, "⚡ Siro MCP Server v0.4.1 — Started\n");
         fwrite(STDERR, "   Project: " . basename($this->basePath) . "\n");
         fwrite(STDERR, "   Tools:   9 registered\n");
         fwrite(STDERR, "   Resources: 4 providers\n");

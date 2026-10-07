@@ -132,7 +132,7 @@ final class McpServerStdioTest extends TestCase
         $init = $this->readResponse();
         $this->assertNotNull($init);
         $this->assertSame(1, $init['id']);
-        $this->assertSame('0.4.0', $init['result']['serverInfo']['version']);
+        $this->assertSame('0.4.1', $init['result']['serverInfo']['version']);
 
         $this->send(['jsonrpc' => '2.0', 'id' => 2, 'method' => 'ping']);
         $ping = $this->readResponse();

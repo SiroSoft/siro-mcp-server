@@ -101,6 +101,10 @@ final class ProductController extends Controller
 }
 PHP;
 
+// Normalize line endings: on Windows checkouts this file may carry CRLF,
+// which would leak \r into the fixture and break exact-match patch context.
+$buggyController = str_replace("\r\n", "\n", $buggyController);
+
 file_put_contents($app . '/app/Controllers/ProductController.php', $buggyController);
 file_put_contents(
     $app . '/app/Models/Product.php',
