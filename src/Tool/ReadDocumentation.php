@@ -103,12 +103,16 @@ final class ReadDocumentation implements ToolInterface
         $docFile = self::DOC_MAP[$topic];
         $topicTitle = self::DOC_TOPIC_MAP[$topic] ?? $topic;
 
+        // DOC_MAP values may carry a `#section` fragment (e.g. DATABASE.md#model-orm).
+        // Strip it for file lookup — the section is extracted after reading.
+        $fileName = str_contains($docFile, '#') ? (string) explode('#', $docFile)[0] : $docFile;
+
         // Try core docs first
-        $coreFile = $this->coreDocsPath . '/' . $docFile;
+        $coreFile = $this->coreDocsPath . '/' . $fileName;
 
         // Try project-level docs for guides
         $projectDocsPath = $this->basePath . '/docs';
-        $projectGuideFile = $projectDocsPath . '/' . $docFile;
+        $projectGuideFile = $projectDocsPath . '/' . $fileName;
 
         $content = null;
 

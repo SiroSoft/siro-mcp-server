@@ -64,6 +64,44 @@ Configure your MCP-compatible AI client to connect via stdio:
 }
 ```
 
+**Claude Code (terminal — recommended for Siro development):**
+
+No JSON config needed. From your project root:
+
+```bash
+claude mcp add siro -- php siro mcp:serve
+```
+
+Verify the connection:
+
+```bash
+claude mcp list
+# siro: php siro mcp:serve ✓ Connected
+```
+
+For a shared setup committed with the project (the whole team gets it on
+`git pull`), create `.mcp.json` in the project root instead:
+
+```json
+{
+  "mcpServers": {
+    "siro": {
+      "command": "php",
+      "args": ["siro", "mcp:serve"],
+      "env": {
+        "SIRO_MCP_APPROVAL_TOKEN": "your-operator-token"
+      }
+    }
+  }
+}
+```
+
+> Claude Code launches stdio servers with the project directory as the working
+> directory, so `php siro mcp:serve` resolves inside your app with no `cwd`
+> needed. Mutating tools (`write_file`, `patch_file`, scaffolds) require
+> `SIRO_MCP_APPROVAL_TOKEN` — see [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+> Try the runnable error → analysis demo in [`docs/DEMO.md`](docs/DEMO.md).
+
 **Cursor / VS Code (settings.json):**
 ```json
 {
@@ -76,6 +114,19 @@ Configure your MCP-compatible AI client to connect via stdio:
   }
 }
 ```
+
+### 4. See it in action (2-minute runnable demo)
+
+Watch an AI agent diagnose a real `500` through MCP — no Claude subscription needed,
+the script plays both sides over the actual JSON-RPC server:
+
+```bash
+php demo/error-analysis.php
+```
+
+It builds a broken app, walks the full MCP session (initialize → analyze →
+read trace → verify against installed core → approved patch → `php -l`),
+and prints every request/response. Full walkthrough: [`docs/DEMO.md`](docs/DEMO.md).
 
 ---
 
