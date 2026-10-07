@@ -20,7 +20,7 @@ use SiroSoft\McpServer\Tool\ToolInterface;
  */
 final class McpServer
 {
-    private const SERVER_VERSION = '0.4.0';
+    private const SERVER_VERSION = '0.4.1';
     private const DEFAULT_PROTOCOL_VERSION = '2025-03-26';
     /** @var list<string> */
     private const SUPPORTED_PROTOCOL_VERSIONS = [

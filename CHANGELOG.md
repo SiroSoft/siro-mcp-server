@@ -1,6 +1,6 @@
 # Changelog — siro-mcp-server
 
-## [Unreleased]
+## [0.4.1] - 2026-10-07
 
 ### Fixed
 - `read_documentation` topics carrying a `#section` fragment (`model`,

@@ -39,7 +39,7 @@ php siro mcp:serve
 The server listens on **STDIN/STDOUT** for JSON-RPC requests. You should see:
 
 ```
-    ⚡ Siro MCP Server v0.4.0 — Started
+    ⚡ Siro MCP Server v0.4.1 — Started
    Project: your-project
    Tools:   9 registered
    Resources: 4 providers
