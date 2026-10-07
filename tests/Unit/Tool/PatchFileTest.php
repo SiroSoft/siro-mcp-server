@@ -144,4 +144,46 @@ final class PatchFileTest extends TestCase
 
         $this->assertStringContainsString('Error applying diff', $result);
     }
+
+    public function test_applies_lf_diff_to_crlf_file_and_keeps_crlf(): void
+    {
+        file_put_contents($this->basePath . '/app/file.txt', "line1\r\nline2\r\nline3");
+
+        $result = $this->tool->execute([
+            'path' => 'app/file.txt',
+            'diff' => "line1\n-line2\n+modified2\nline3",
+            'mode' => 'direct',
+        ]);
+
+        $this->assertStringContainsString('OK', $result);
+        $this->assertSame("line1\r\nmodified2\r\nline3", file_get_contents($this->basePath . '/app/file.txt'));
+    }
+
+    public function test_applies_crlf_diff_to_crlf_file(): void
+    {
+        file_put_contents($this->basePath . '/app/file.txt', "line1\r\nline2");
+
+        $result = $this->tool->execute([
+            'path' => 'app/file.txt',
+            'diff' => "line1\r\n-line2\r\n+modified2",
+            'mode' => 'direct',
+        ]);
+
+        $this->assertStringContainsString('OK', $result);
+        $this->assertSame("line1\r\nmodified2", file_get_contents($this->basePath . '/app/file.txt'));
+    }
+
+    public function test_applies_crlf_diff_to_lf_file_and_keeps_lf(): void
+    {
+        file_put_contents($this->basePath . '/app/file.txt', "line1\nline2");
+
+        $result = $this->tool->execute([
+            'path' => 'app/file.txt',
+            'diff' => "line1\r\n-line2\r\n+modified2",
+            'mode' => 'direct',
+        ]);
+
+        $this->assertStringContainsString('OK', $result);
+        $this->assertSame("line1\nmodified2", file_get_contents($this->basePath . '/app/file.txt'));
+    }
 }

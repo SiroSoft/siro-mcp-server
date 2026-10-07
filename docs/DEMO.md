@@ -19,7 +19,7 @@ dir printed on the last line so you can inspect it.
 | # | Claude (script) → | MCP server ← |
 |---|---|---|
 | 0 | *setup:* broken app + `500` trace written to `storage/framework/traces/` | — |
-| 1 | `initialize` | `siro-mcp-server 0.4.1`, tools + resources capabilities |
+| 1 | `initialize` | `siro-mcp-server 0.4.2`, tools + resources capabilities |
 | 2 | `tools/list` | 9 tools (`analyze_project`, `patch_file`, scaffolds, …) |
 | 3 | `tools/call analyze_project` | project summary: 1 model, 1 controller |
 | 4 | `resources/read siro://debug/traces/latest` | `GET /api/products → 500`, `Class "Siro\Core\Http\Request" not found` at `ProductController.php:8` |

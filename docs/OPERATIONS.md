@@ -1,6 +1,6 @@
 # Siro MCP Operations Guide
 
-This guide covers safe day-to-day use of Siro MCP Server v0.4.1.
+This guide covers safe day-to-day use of Siro MCP Server v0.4.2.
 
 ## Security Model
 
@@ -100,4 +100,4 @@ php siro list
 php siro mcp:serve
 ```
 
-The expected startup banner reports 9 tools, 4 resource providers, and server version `0.4.1`.
+The expected startup banner reports 9 tools, 4 resource providers, and server version `0.4.2`.

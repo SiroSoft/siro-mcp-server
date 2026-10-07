@@ -126,8 +126,12 @@ final class PatchFile implements ToolInterface
      */
     private function applyDiff(string $original, string $diff): array
     {
-        $originalLines = explode("\n", $original);
-        $diffLines = explode("\n", $diff);
+        // Tolerate CRLF checkouts (e.g. Windows): match on LF-normalized
+        // lines, then restore the file's own endings on write — so LF diffs
+        // apply to CRLF files and vice versa, without touching the rest.
+        $lineEnding = str_contains($original, "\r\n") ? "\r\n" : "\n";
+        $originalLines = explode("\n", str_replace("\r\n", "\n", $original));
+        $diffLines = explode("\n", str_replace("\r\n", "\n", $diff));
 
         $resultLines = [];
         $originalIndex = 0;
@@ -191,7 +195,7 @@ final class PatchFile implements ToolInterface
 
         return [
             'success' => true,
-            'content' => implode("\n", $resultLines),
+            'content' => implode($lineEnding, $resultLines),
             'removed' => $removed,
             'added' => $added,
             'error' => '',

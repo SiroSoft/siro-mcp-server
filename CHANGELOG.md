@@ -1,5 +1,12 @@
 # Changelog — siro-mcp-server
 
+## [0.4.2] - 2026-10-07
+
+### Fixed
+- `patch_file` tolerates CRLF line endings: matching runs on LF-normalized
+  lines and the file's own endings are restored on write — LF diffs now apply
+  to CRLF-checked-out files (Windows) and vice versa.
+
 ## [0.4.1] - 2026-10-07
 
 ### Fixed
