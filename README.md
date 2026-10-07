@@ -28,7 +28,7 @@ The server runs over **stdio** and provides:
 composer require sirosoft/mcp-server
 ```
 
-> Requires PHP 8.2+ and `sirosoft/core ^0.35.0`.
+> Requires PHP 8.2+ and `sirosoft/core ^1.0.14`.
 
 ### 2. Start the Server
 
@@ -39,10 +39,10 @@ php siro mcp:serve
 The server listens on **STDIN/STDOUT** for JSON-RPC requests. You should see:
 
 ```
-⚡ Siro MCP Server v0.1.1 — Started
+    ⚡ Siro MCP Server v0.4.0 — Started
    Project: your-project
    Tools:   9 registered
-   Resources: 3 providers
+   Resources: 4 providers
    Protocol: JSON-RPC 2.0 over stdio
    Waiting for AI agent connection...
 ```
@@ -93,14 +93,19 @@ The server registers **9 tools** that AI agents can invoke:
 | `scaffold_model` | Generate model classes with fillable, casts, and relations |
 | `scaffold_controller` | Generate controller classes with optional CRUD methods |
 | `scaffold_migration` | Generate database migrations with columns, indexes, and foreign keys |
-| `scaffold_resource` | Full CRUD scaffolding (model + migration + controller + routes) |
+| `scaffold_resource` | Full CRUD scaffolding (model + migration + repository + service + controller + resource + routes + feature test) |
 
 ### Security
 
 - **Path traversal protection**: All file operations are validated against the project root
 - **CLI whitelist**: Only pre-approved commands are executable
-- **Destructive commands** (migrate, db:seed) require explicit `--force` flag
+- **Operator approval**: File writes, scaffolding, and destructive CLI commands require `SIRO_MCP_APPROVAL_TOKEN`
+- **Audit trail**: Every tool call gets a run ID and is recorded with secret redaction
+- **Destructive commands** (migrate, db:seed) require both approval and the explicit `--force` flag
 - **Blocked commands**: `tinker`, `shell`, `exec`, `eval`, `system`, `passthru`
+
+For the complete approval, audit, incident-response, and production topology
+runbook, see [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ---
 
@@ -121,6 +126,7 @@ AI agents can read contextual data via `siro://` URIs:
 | `siro://app/openapi` | OpenAPI specification |
 | `siro://debug/traces/latest` | Latest request trace |
 | `siro://debug/errors/latest` | Latest application error |
+| `siro://mcp/runs/latest` | Latest MCP tool execution, including status and duration |
 
 ---
 
@@ -137,7 +143,7 @@ AI agents can read contextual data via `siro://` URIs:
 │                                      │
 │  ┌─────────┐  ┌──────────────────┐  │
 │  │  Tools  │  │   Resources      │  │
-│  │ (9 reg) │  │  (3 providers)   │  │
+│  │ (9 reg) │  │  (4 providers)   │  │
 │  ├─────────┤  ├──────────────────┤  │
 │  │ Project │  │ siro://docs/*    │  │
 │  │ Analyzer│  │ siro://app/*     │  │
@@ -210,6 +216,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 - **v0.1.x** — Initial release (tools + resources + context + security)
 - **v0.2.x** — Protocol enhancements, additional tools
+- **v0.3.x** — Audited approval-gated execution, run resources
+- **v0.4.x** — Full layered CRUD scaffolding, core 1.3 support
 
 ---
 

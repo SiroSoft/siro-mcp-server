@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SiroSoft\McpServer;
 
 use SiroSoft\McpServer\Resource\ResourceInterface;
+use SiroSoft\McpServer\Security\ApprovalPolicy;
+use SiroSoft\McpServer\Security\AuditLogger;
 use SiroSoft\McpServer\Tool\ToolInterface;
 
 /**
@@ -18,7 +20,14 @@ use SiroSoft\McpServer\Tool\ToolInterface;
  */
 final class McpServer
 {
-    private const PROTOCOL_VERSION = '0.2.0';
+    private const SERVER_VERSION = '0.4.0';
+    private const DEFAULT_PROTOCOL_VERSION = '2025-03-26';
+    /** @var list<string> */
+    private const SUPPORTED_PROTOCOL_VERSIONS = [
+        '2025-06-18',
+        '2025-03-26',
+        '2024-11-05',
+    ];
     private const SERVER_NAME = 'siro-mcp-server';
 
     /** @var array<string, ToolInterface> */
@@ -26,6 +35,13 @@ final class McpServer
 
     /** @var array<string, ResourceInterface> */
     private array $resourceHandlers = [];
+
+    public function __construct(
+        private readonly ?AuditLogger $auditLogger = null,
+        private readonly ?ApprovalPolicy $approvalPolicy = null,
+    ) {
+        // Keep the no-argument constructor useful for protocol unit tests.
+    }
 
     /**
      * Register a tool that the AI agent can call.
@@ -55,7 +71,8 @@ final class McpServer
             }
 
             $request = json_decode($line, true);
-            if (!is_array($request) || !isset($request['jsonrpc'], $request['method']) || !is_string($request['method'])) {
+            if (!is_array($request)) {
+                $this->writeResponse($this->makeError(null, -32700, 'Parse error'));
                 continue;
             }
 
@@ -73,14 +90,26 @@ final class McpServer
      */
     private function handleRequest(array $request): ?array
     {
-        $method = $request['method'];
+        $method = $request['method'] ?? null;
         /** @var int|string|null $id */
-        $id = $request['id'] ?? null;
-        if (!is_string($method)) {
-            return $this->makeError($id, -32600, 'Method must be a string');
+        $id = array_key_exists('id', $request) && (is_int($request['id']) || is_string($request['id']) || $request['id'] === null)
+            ? $request['id']
+            : null;
+
+        if (($request['jsonrpc'] ?? null) !== '2.0' || !is_string($method)) {
+            return $this->makeError($id, -32600, 'Invalid Request');
+        }
+
+        // JSON-RPC 2.0: no "id" field means notification — no response
+        if (!array_key_exists('id', $request)) {
+            return null;
+        }
+
+        $params = $request['params'] ?? [];
+        if (!is_array($params)) {
+            return $this->makeError($id, -32602, 'Params must be an object');
         }
         /** @var array<string, mixed> $params */
-        $params = $request['params'] ?? [];
 
         try {
             return match ($method) {
@@ -105,15 +134,20 @@ final class McpServer
      */
     private function handleInitialize(array $params, int|string|null $id): array
     {
+        $requestedVersion = $params['protocolVersion'] ?? self::DEFAULT_PROTOCOL_VERSION;
+        if (!is_string($requestedVersion) || !in_array($requestedVersion, self::SUPPORTED_PROTOCOL_VERSIONS, true)) {
+            return $this->makeError($id, -32602, 'Unsupported protocol version');
+        }
+
         return $this->makeResult($id, [
-            'protocolVersion' => self::PROTOCOL_VERSION,
+            'protocolVersion' => $requestedVersion,
             'capabilities' => [
                 'tools' => new \stdClass(),
                 'resources' => new \stdClass(),
             ],
             'serverInfo' => [
                 'name' => self::SERVER_NAME,
-                'version' => self::PROTOCOL_VERSION,
+                'version' => self::SERVER_VERSION,
             ],
         ]);
     }
@@ -129,7 +163,7 @@ final class McpServer
             $tools[] = [
                 'name' => $tool->getName(),
                 'description' => $tool->getDescription(),
-                'inputSchema' => $tool->getInputSchema(),
+                'inputSchema' => $this->approvalPolicy?->augmentSchema($tool->getName(), $tool->getInputSchema()) ?? $tool->getInputSchema(),
             ];
         }
 
@@ -160,27 +194,55 @@ final class McpServer
         }
 
         /** @var array<string, mixed> $arguments */
-        try {
-            $result = $tool->execute($arguments);
-            return $this->makeResult($id, [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => $result,
-                    ],
-                ],
-            ]);
-        } catch (\Throwable $e) {
-            return $this->makeResult($id, [
-                'content' => [
-                    [
-                        'type' => 'text',
-                        'text' => "Error: {$e->getMessage()}",
-                    ],
-                ],
-                'isError' => true,
-            ]);
+        $approvalPolicy = $this->approvalPolicy;
+        $requiresApproval = $approvalPolicy !== null && $approvalPolicy->requiresApproval($name, $arguments);
+        $approved = !$requiresApproval || $this->isApproved($approvalPolicy, $arguments);
+        $auditRun = $this->auditLogger?->start($name, $id, $arguments);
+
+        if (!$approved) {
+            $message = 'Approval required. Set SIRO_MCP_APPROVAL_TOKEN for the operator and pass approval_token.';
+            $this->auditLogger?->finish($auditRun ?? [], 'denied', $message, false);
+            return $this->makeToolResult($id, $message, true, $auditRun['id'] ?? null);
         }
+
+        $toolArguments = $approvalPolicy !== null ? $approvalPolicy->stripApprovalToken($arguments) : $arguments;
+        /** @var array<string, mixed> $toolArguments */
+        try {
+            $result = $tool->execute($toolArguments);
+            $this->auditLogger?->finish($auditRun ?? [], 'completed', $result, true);
+            return $this->makeToolResult($id, $result, false, $auditRun['id'] ?? null);
+        } catch (\Throwable $e) {
+            $message = "Error: {$e->getMessage()}";
+            $this->auditLogger?->finish($auditRun ?? [], 'failed', $message, true);
+            return $this->makeToolResult($id, $message, true, $auditRun['id'] ?? null);
+        }
+    }
+
+    /** @param array<string, mixed> $arguments */
+    private function isApproved(?ApprovalPolicy $policy, array $arguments): bool
+    {
+        return $policy !== null && $policy->isApproved($arguments);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function makeToolResult(int|string|null $id, string $text, bool $isError, ?string $runId): array
+    {
+        $result = [
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => $text,
+                ],
+            ],
+            'isError' => $isError,
+        ];
+        if ($runId !== null) {
+            $result['_meta'] = ['runId' => $runId];
+        }
+
+        return $this->makeResult($id, $result);
     }
 
     /**

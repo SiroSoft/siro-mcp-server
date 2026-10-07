@@ -17,7 +17,8 @@ final class PathValidator
 
     public function __construct(string $projectRoot)
     {
-        $this->projectRoot = rtrim(str_replace('\\', '/', $projectRoot), '/');
+        $resolvedRoot = realpath($projectRoot);
+        $this->projectRoot = rtrim(str_replace('\\', '/', $resolvedRoot !== false ? $resolvedRoot : $projectRoot), '/');
     }
 
     /**
@@ -47,18 +48,31 @@ final class PathValidator
             // Still verify the parent directory is within project
             $dirName = dirname($fullPath);
             $realDir = realpath($dirName);
-            if ($realDir === false || !str_starts_with(str_replace('\\', '/', $realDir), $this->projectRoot)) {
+            if ($realDir === false || !$this->isWithinRoot($realDir)) {
                 throw new \RuntimeException('Path traversal detected: parent directory outside project');
             }
             return str_replace('\\', '/', $fullPath);
         }
 
         $realPath = str_replace('\\', '/', $realPath);
-        if (!str_starts_with($realPath, $this->projectRoot)) {
+        if (!$this->isWithinRoot($realPath)) {
             throw new \RuntimeException('Path traversal detected: resolved path outside project');
         }
 
         return $realPath;
+    }
+
+    private function isWithinRoot(string $path): bool
+    {
+        $root = str_replace('\\', '/', $this->projectRoot);
+        $candidate = str_replace('\\', '/', $path);
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $root = strtolower($root);
+            $candidate = strtolower($candidate);
+        }
+
+        return $candidate === $root || str_starts_with($candidate, $root . '/');
     }
 
     /**

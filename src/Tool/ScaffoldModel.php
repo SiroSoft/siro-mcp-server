@@ -129,7 +129,7 @@ final class ScaffoldModel implements ToolInterface
         $traits = '';
 
         if ($softDeletes) {
-            $uses[] = 'Siro\\Core\\Model\\SoftDeletes';
+            $uses[] = 'Siro\\Core\\DB\\SoftDeletes';
             $traits = "\n    use SoftDeletes;\n";
         }
 
@@ -146,7 +146,7 @@ final class ScaffoldModel implements ToolInterface
             $relationsStr .= <<<PHP
 
 
-    public function {$relMethod}(): \\Siro\\Core\\ModelRelations\\{$this->studly($relType)}
+    public function {$relMethod}(): \\Siro\\Core\\DB\\Relations\\{$this->studly($relType)}
     {
         return \$this->{$relType}({$relTarget}::class);
     }
@@ -176,9 +176,8 @@ final class {$name} extends Model
     ];
 
     /** @var array<int, string> */
-    protected array \$hidden = [];
+    protected array \$hidden = [];{$relationsStr}
 }
-{$relationsStr}
 PHP;
     }
 
